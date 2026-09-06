@@ -1,0 +1,56 @@
+770	"订单", "实付", "¥", "×", "下单", "购买", "拼单", "默认", "理赔", "赔付", "慢必赔", "删除",
+771	"评价", "再买", "退款", "售后", "投诉", "签到", "图片", "商品", "加载", "更多", "搜索",
+772	"筛选", "管理", "消息", "返回", "释放", "已送达", "已完成", "订单号", "门店", "包装"
+773	).any { desc.contains(it) } || desc.matches(Regex("""\d[\d.¥]*"""))
+818	payLabels.add(Node(cy, x0, x1, "实付款"))
+864	Log.w(TAG, "淘宝卡解析：有 ¥金额(${prices.size})但未找到「实付款」标签，跳过防误判")
+892	Log.d(TAG, "⏭ 淘宝未匹配·无日期·暂不入账: $merchant ¥${"%.2f".format(amt)}（列表不显示日期，且支付时间在本地账单无对应记录）")
+895	Log.d(TAG, "淘宝卡解析: 金额${amounts.size} 状态${statuses.size} 店名候选${brands.size} 个, 处理 $processed（均按匹配结果跳过/暂不入账）")
+951	Log.d(TAG, "🕒 淘宝时间匹配=多笔之和: $merchant ¥${"%.2f".format(amount)} = 同店同天合计 ¥${"%.2f".format(sumBestTotal)} @${fmtTimeForLog(sumBestMs)}（该天已入账，跳过防重复）")
+1027	if (iconRect != null && tryOrderEntry(iconRect!!, "我的订单-图标")) return true
+1028	if (headerRect != null && tryOrderEntry(headerRect!!, "我的订单-标题")) return true
+1029	Log.w(TAG, "❌ 未成功进入淘宝订单中心")
+1150	Log.d(TAG, "🛒 [$source] 当前屏为商品/信息流而非账单列表，跳过解析")
+1154	Log.d(TAG, "🚫 [$source] 当前屏是「我的/个人中心」页而非订单列表，跳过解析（防止把个人页当账单/空跑）")
+1164	Log.d(TAG, "🧾 淘宝卡解析新增 $tbAdded 笔")
+1172	Log.d(TAG, "🧾 文字解析[$source] 订单样式新增 $orderAdded 笔")
+1198	Log.d(TAG, "🧾 文字解析[$source] 独立金额新增 $added 笔")
+1208	if (e.type.contains("收")) continue
+1224	Log.d(TAG, "👁️ 视觉解析[$source] 第屏新增 $added 笔（文字不可读时兜底）")
+1307	postUILog("❌ 窗口不可读，重启淘宝到首页重试")
+1311	debugPrintCurrentScreen()
+1337	Log.d(TAG, "✅ 已在淘宝主界面（检测到底部导航）")
+1343	Log.d(TAG, "🧭 已点顶部「返回」，第$backsThisRound 次")
+1349	Log.d(TAG, "🧭 全局返回，第$backsThisRound 次")
+1370	Log.d(TAG, "✅ 已发起淘宝首页重启")
+1397	!d.contains("订单") && !d.contains("全部") && !d.contains("更多")
+1682	Log.w(TAG, "截屏失败 errorCode=$errorCode（可能被安全策略拦截）")
+1697	postUILog("👁️ 视觉定位「$target」…")
+1705	postUILog("❌ 视觉模型未找到「$target」")
+1791	val jumpish = joined.contains("跳转") || joined.contains("仅本次") ||
+1792	joined.contains("总是允许") || joined.contains("想要打开") ||
+1793	joined.contains("打开应用") || joined.contains("前往查看") ||
+1794	(joined.contains("允许") && (joined.contains("打开") || joined.contains("跳转")))
+1962	t.matches(Regex("""\d{1,2}:\d{2}""")) || t.matches(Regex("""\d{4}-\d{2}-\d{2}""")) ||
+2037	Regex("""^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})日(?:\s*(\d{1,2}):(\d{2}))?$""").find(t)?.let { m ->
+2048	Regex("""^(\d{1,2})月(\d{1,2})日(?:\s*(?:周[一二三四五六日天]|星期[一二三四五六日天]))?(?:\s*(\d{1,2}):(\d{2}))?$""")
+2062	Regex("""^(\d{2})-(\d{2})(?:\s*(\d{1,2}):(\d{2}))?$""").find(t)?.let { m ->
+2084	"""今天\s*\d{1,2}:\d{2}|昨天\s*\d{1,2}:\d{2}|""" +
+2085	"""\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日(?:\s*\d{1,2}:\d{2})?|""" +
+2086	"""\d{1,2}月\d{1,2}日(?:\s*\d{1,2}:\d{2})?|\d{2}-\d{2}(?:\s*\d{1,2}:\d{2})?"""
+2121	Log.d(TAG, "📱 当前屏幕文本: ${texts.filter { it.isNotBlank() }.take(50)}")
+2434	"desc(前6): ${if (dTail.isEmpty()) "〈空〉" else dTail}"
+2452	Log.d(TAG, "✅ 成功点击美团搜索框")
+2457	Log.d(TAG, "📋 已将 '$restaurantName' 写入剪贴板并尝试粘贴")
+2461	Log.d(TAG, "✅ 成功点击第一个搜索结果")
+2463	Log.w(TAG, "❌ 未找到可点击的搜索结果")
+2466	Log.d(TAG, "🏁 完成AI推荐自动化流程: $restaurantName")
+2468	Log.w(TAG, "⚠️ 未找到美团搜索框，尝试坐标点击兜底")
+2508	val searchTexts = listOf("搜索商家或商品", "搜索", "请输入商家名称")
+2563	Log.d(TAG, "✅ 找到可点击父容器 (深度: $depth)")
+2571	Log.d(TAG, "✅ 餐厅标题自身可点击")
+2579	Log.w(TAG, "❌ 未找到任何餐厅标题或可点击容器")
+2612	Log.w(TAG, "⚠️ rootInActiveWindow 为空（界面未加载）")
+2635	Log.d(TAG, "♻️ 实时[$source] ¥$amount 与另一通道重复，跳过（merchant=$merchant）")
+2663	tokens.any { it.contains("最近消费") || it.contains("小时前") || it.contains("分钟前") ||
+2675	it.contains("付款成功") || it.contains("转账成功") || it.contains("已转出") ||

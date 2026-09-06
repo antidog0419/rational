@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 仅 debug 构建生效：测试期自动化钩子（广播驱动）不进 release 包 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name=".debug.DebugReceiver"
+            android:exported="true" />
+    </application>
+</manifest>

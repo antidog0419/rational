@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">理伴</string>
+    <string name="accessibility_description">用于自动读取消费记录，帮助你管理财务</string>
+</resources>

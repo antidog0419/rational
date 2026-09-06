@@ -1,0 +1,34 @@
+326	recordAt("支付宝账单", e.merchant, e.amount, timeMs)
+779	r = r.replace(Regex("""[(（][^)）]*[)）]"""), "")                 // (海洋大学店) 等括号内文本
+780	r = r.replace(Regex("""外卖订单|外送订单|订单|海洋大学店|海大店|湖光岩店|海大湖畔食堂店|商中美食城|第\s*\d+\s*档口|门店|美食城"""), "")
+781	r = r.replace(Regex("""[·・，。、\s'"]"""), "")
+782	return r
+783	}
+784	
+785	
+786	
+1396	if ((d.contains("我的淘宝") || d.contains("购物车")) &&
+1797	postUILog("🔐 检测到系统「跳转」许可弹窗，点击允许…")
+1852	it.contains("待收货") || it.contains("待评价") || it.contains("交易成功") ||
+1871	it.contains("下单时间") || it.contains("已完成") || it.contains("待付款") ||
+1872	it.contains("待发货") || it.contains("待收货") || it.contains("待评价")
+1887	val inline = Regex("""^(.{1,40}?)，\s*([-+])?\s*[¥￥]?\s*([0-9]+(?:\.[0-9]{1,2})?)元""")
+1898	val merchant = m.groupValues[1].trim().removeSuffix("，").take(24)
+1906	recordAt("支付宝账单", merchant, amount, rowTime)
+1926	recordAt("支付宝账单", merchant, amount, cursor2)
+1955	t.contains("星期") || t.contains("月") && t.any { it.isDigit() } ||
+1957	t.contains("退款") || t.contains("更多") || t.contains("余额") ||
+1981	.format(java.util.Date(it)) } ?: "--"
+2287	logJudgeMiss("弱命中但疑似信息流", texts, descs, strongCta, weakCta, sumInfo, feedish)
+2314	val merchant = pickMerchantName(root, markers, h) ?: "待下单商品"
+2330	"🛒 下单前判断[强=$hitStrong 弱=$hitWeak 合计=$hitSum feed=$feedish] " +
+2331	"$merchant ¥${"%.2f".format(amount)}（$cat）→ $verdict"
+2433	"底部token(前8): ${if (tail.isEmpty()) "〈空〉" else tail} " +
+2687	val amount = Regex("""支出[¥￥]?([0-9]+(?:\.[0-9]{1,2})?)""").find(joined)
+2704	var merchant = "支付宝消费"
+2711	if (merchant == "支付宝消费") {
+2713	val payeeIdx = allText.indexOfFirst { it.contains("收款人") }
+2718	?: allText.firstOrNull { it.contains("转账给") }?.substringAfter("转账给")?.trim()
+2720	?: allText.firstOrNull { it.contains("收款") && it.contains("付款") }?.let {
+2721	it.substringAfter("收款").substringBefore("付款").trim()
+2723	?: allText.firstOrNull { it.contains("付款给") }?.substringAfter("付款给")?.trim()

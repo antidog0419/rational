@@ -1,0 +1,33 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+# === Added at repo init (2026-09-06) ===
+# build outputs / packages
+**/build/
+.kotlin/
+*.apk
+*.aab
+
+# local diagnostics (device dumps / e2e logs / bill exports)
+*.log
+calib_*.txt
+taobao_home_dump.txt
+
+# crash-recovery artifacts (source already restored and committed)
+*.corrupt.bak
+
+# IDE (whole dir)
+/.idea/
+*.repair-report.txt

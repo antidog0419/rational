@@ -1,0 +1,83 @@
+44	"确认订单", "提交订单", "确认下单", "确认支付", "确认付款", "确认并支付", "支付订单",
+45	"去支付", "立即支付", "极速支付"
+52	"支付", "下单", "购买", "结算", "买单", "付款", "去结算",
+53	"立即购买", "马上购买", "立即下单", "一键购买", "去买单"
+58	"合计", "应付", "需付", "实付", "小计", "总价", "共需", "共减", "券前", "收货", "地址"
+106	        postUILog("♿ 无障碍服务已连接，可开始抓取账单")
+114	                postUILog("📋 检测到之前排队的抓取请求，自动开始…")
+117	                postUILog("⏳ 检测到排队抓取请求：回到本应用后将自动开始")
+139	                        Log.d(TAG, "📋 收到抓取支付宝账单指令")
+162	                            billLabels = listOf("我的订单", "待付款", "待发货", "待收货"),
+163	                            postLabels = listOf("闪购"),
+198	            postUILog("⏳ 抓取账单进行中，请稍候")
+205	                postUILog("📋 开始抓取支付宝历史账单…")
+213	                postUILog("🚀 已打开支付宝，等待页面加载…")
+214	                updateFetchUI("① 已打开支付宝，等待页面…")
+217	                    postUILog("⏳ 支付宝前台确认超时，仍继续尝试进入账单页…")
+222	                    postUILog("❌ 未能进入「账单」页（可能未登录/页面结构变化）。已打印当前屏幕文本供排查。")
+226	                postUILog("✅ 已进入账单页，开始逐屏识别并滚动…")
+227	                updateFetchUI("② 已进入账单页，逐屏解析中…")
+245	                    postUILog("📄 第 $screen 屏：新识别 $newCount 笔，累计识别 ${seen.size} 条")
+275	                    endFetchUI("✅ 抓取完成：共 $totalAdded 笔")
+303	            Log.d(TAG, "🚫 [支付宝] 当前屏是「我的/个人中心」页而非账单列表，跳过解析")
+314	            postUILog("❌ 当前页面不是账单明细列表，停止抓取（可能点错入口）")
+321	                if (e.type.contains("收")) continue // 只记录支出
+322	                    recordAt("支付宝账单", e.merchant, e.amount, timeMs)
+366	        return listOf("会员中心", "成长值", "权益", "签到", "我的资产").count { joined.contains(it) } >= 3
+380	            postUILog("⏳ 已有抓取任务进行中，请稍候")
+387	                postUILog("📋 开始抓取「$source」账单…")
+393	                    postUILog("⚠️ 未安装「$source」应用，请先安装并登录")
+398	                postUILog("🚀 已打开「$source」，尝试进入账单页…")
+399	                updateFetchUI("① 已打开$source，等待前台…")
+413	                        postUILog("✅ 已处理系统跳转许可弹窗，继续等待「$source」…")
+427	                postUILog("✅ 「$source」已到前台（${waitSec}s），等待页面稳定…")
+432	                    postUILog("🧭 检查/回到淘宝主界面（活动页将自动逐级返回）…")
+434	                        postUILog("❌ 检测不到淘宝主界面底部导航，中止本次抓取")
+438	                    postUILog("✅ 已在淘宝主界面，开始导航到订单…")
+443	                            Log.d(TAG, "🧭 第${attempt}轮 step=$stepIndex/${steps.size} texts=${snapshotTexts(root, 14)}")
+460	                        Log.d(TAG, "🧭 第${attempt}轮 root 为空（页面加载中），稍候重试")
+471	                            postUILog("✅ 导航途中已处理系统跳转许可弹窗")
+506	                        postUILog("❌ 点完「我的淘宝」后仍停在信息流（非订单页），中止本次抓取")
+524	                            postUILog("✅ desc 点底部「${steps[0]}」")
+554	                        postUILog("✅ 已点「$label」")
+561	                        postUILog("✅ desc 点「$label」")
+569	                            postUILog("👁️ 视觉点「$label」")
+582	                        Log.d(TAG, "🧭 未找到「$label」，下轮重试…")
+591	                postUILog("✅ 已进入「$source」账单页，逐屏解析中…")
+592	                updateFetchUI("② $source 账单解析中…")
+601	                    Log.d(TAG, "📚 淘宝时间匹配：已载入 ${tbIndexBills.size} 条本地账单")
+619	                    postUILog("📄 第 $screen 屏：新识别 $added 笔，累计识别 ${seen.size} 条")
+630	                            postUILog("⏹ 连续两屏无新记录，停止")
+638	                            postUILog("⏹ 手势失败，停止滚动")
+649	                    endFetchUI("✅ $source 抓取完成 ${seen.size} 笔")
+655	                        postUILog("🧠 已请 AI 汇总点评「$source」账单")
+663	                postUILog("⏹ 已停止抓取「$source」账单")
+682	        .take(n).joinToString("、") { "${it.key}(¥${"%.2f".format(it.value)})" }
+689	        val hasStatus = texts.any { it.contains("已完成") || it.contains("待评价") || it.contains("待付款") }
+690	        val hasYuan = texts.any { it.trim() == "¥" || it.trim() == "￥" }
+712	            if (t == "¥" || t == "￥") {
+733	                        if (tk.contains("已完成") || tk.contains("待评价") || tk.contains("待付款")) {
+763	        "已送达", "已完成", "已收货", "交易成功", "已评价", "待评价", "待付款", "待发货", "待收货", "待使用",
+784	        r = r.replace(Regex("""[·・，。、\s""'"]"""), "")
+816	            if (d.contains("实付款")) {
+994	            if (d.startsWith("待付款") || d.startsWith("待评价")) {
+997	            if (d.contains("我的订单") && !d.contains("更多")) {
+1079	        Log.d(TAG, if (ok) "✅ 已进入闪购订单页" else "⚠️ 点「闪购」后未确认，仍尝试解析")
+1110	            if ((d.contains("筛选") && d.contains("管理"))) hasFilterManage = true
+1130	            if (d == "实付款" || d.contains("实付款")) payDesc++
+1208	                    if (e.type.contains("收")) continue
+1397	                !d.contains("订单") && !d.contains("删除订单") && !d.contains("更多")
+1441	            if (d.contains(label) && !d.contains("更多")) {
+1479	        if (label == "我的订单" || label == "待付款" || label == "待收货")
+1505	            if (d.contains(label) && !d.contains("更多")) {
+1713	        if (target == "我的订单" || target == "待付款" || target == "待收货") {
+1775	        postUILog("⏹ 正在停止抓取…")
+1776	        updateFetchUI("⏹ 正在停止…")
+1791	        val jumpish = joined.contains("跳转") || joined.contains("仅本次") ||
+1798	        for (c in listOf("总是允许", "仅本次允许", "允许", "前往", "继续", "仍要打开")) {
+1842	        "好评榜", "热销", "已售", "月售", "加购", "首单价", "补贴后", "直降价", "券后", "包邮",
+1843	        "猜你喜欢", "立即购买", "去结算", "起送", "营业中", "评分", "进店", "下单立减"
+1851	                it.contains("已完成") || it.contains("待付款") || it.contains("待发货") ||
+1870	                it.contains("已完成") || it.contains("待付款") || it.contains("待发货") ||
+1962	            if (t.matches(Regex("""\d{1,2}:\d{2}""")) || t.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) return true
+2299	    private fun isProfilePage(root: AccessibilityNodeInfo): Boolean {
