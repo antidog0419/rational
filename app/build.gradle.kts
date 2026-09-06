@@ -1,4 +1,7 @@
 // app/build.gradle.kts
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -109,3 +112,40 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }
+
+// ===== 编码护栏（2026-09-06 GBK 误回写事故的防再犯闸门）=====
+// 每次构建前扫描 src 下文本文件：必须为合法 UTF-8 且不含 U+FFFD。
+// 命令行独立运行：gradlew :app:encodingCheck；独立脚本见 tools/Check-Encoding.ps1。
+val encodingCheck by tasks.registering {
+    group = "verification"
+    description = "扫描 src 文本文件的 UTF-8 合法性（防 GBK 误回写损坏源码）"
+    val patterns = listOf("**/*.kt", "**/*.java", "**/*.xml", "**/*.properties", "**/*.toml", "**/*.md")
+    inputs.files(fileTree("src") { include(patterns) })
+    doLast {
+        val files = fileTree("src") { include(patterns) }.files.sortedBy { it.absolutePath }
+        val bad = mutableListOf<String>()
+        val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+        for (f in files) {
+            val bytes = f.readBytes()
+            try {
+                val text = decoder.decode(ByteBuffer.wrap(bytes)).toString()
+                if (text.indexOf('\uFFFD') >= 0) {
+                    bad += "${f.name}: 合法 UTF-8 但含 U+FFFD（GBK 损坏特征）"
+                }
+            } catch (e: java.nio.charset.CharacterCodingException) {
+                bad += "${f.name}: 非法 UTF-8（${e.message}）"
+            }
+        }
+        if (bad.isNotEmpty()) {
+            throw GradleException(
+                "encodingCheck 未通过（${bad.size} 个文件）：\n  " +
+                    bad.joinToString("\n  ") +
+                    "\n文件疑似被以错误编码(GBK 等)回写，请用 UTF-8 修复后再构建/提交。"
+            )
+        }
+        logger.lifecycle("encodingCheck OK: ${files.size} 个文本文件均为干净 UTF-8")
+    }
+}
+tasks.named("preBuild").configure { dependsOn(encodingCheck) }

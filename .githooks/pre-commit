@@ -1,0 +1,38 @@
+#!/bin/sh
+# Pre-commit encoding guard (UTF-8 integrity).
+#
+# Background: on 2026-09-06 a source file was accidentally rewritten as GBK;
+# 850+ Chinese characters were destroyed and had to be recovered from .class
+# string dictionaries. This hook refuses to commit files that are not clean
+# UTF-8 or that still contain U+FFFD (the corruption signature).
+#
+# Install once with:  git config core.hooksPath .githooks
+
+if command -v pwsh >/dev/null 2>&1; then
+    PS=pwsh
+elif command -v powershell >/dev/null 2>&1; then
+    PS=powershell
+else
+    echo "pre-commit: PowerShell not found; encoding check skipped"
+    exit 0
+fi
+
+# Only staged text files that matter.
+files=$(git diff --cached --name-only --diff-filter=ACM -- \
+    '*.kt' '*.java' '*.kts' '*.xml' '*.properties' '*.toml' '*.md' '*.json' '*.ps1')
+
+if [ -z "$files" ]; then
+    exit 0
+fi
+
+git_dir=$(git rev-parse --git-dir)
+list_file="$git_dir/pre-commit-encoding-files.txt"
+rm -f "$list_file"
+for f in $files; do
+    echo "$f" >> "$list_file"
+done
+
+"$PS" -NoProfile -ExecutionPolicy Bypass -File tools/Check-Encoding.ps1 -ListFile "$list_file"
+rc=$?
+rm -f "$list_file"
+exit $rc
