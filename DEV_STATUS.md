@@ -1,6 +1,27 @@
-# 开发状态备忘(淘宝冷启动抓取 — 已搁置,恢复用)
+# 开发状态备忘(顶部为最近更新)
 
-> ⚠️ 顶部为最近更新;下方「淘宝冷启动抓取」段为搁置中的旧主题,恢复时再参考。
+---
+
+## 【2026-09-07】P0 工程护栏 + P2 解析器测试化 — 全部编译/单测通过
+
+> 背景:仓库此前只有 1 个 init 提交,且 09-06 发生过"GBK 误回写损坏 850+ 中文字符、靠 .class 词典恢复"的事故。本轮先补安全网再动代码;按主题分提交。
+
+### P0 工程护栏(防编码事故再犯,三重防线)
+1. `tools/Check-Encoding.ps1` — 独立扫描脚本:严格 UTF-8 解码(非法字节直接报)+ U+FFFD 检测。`-ScanPath` 扫目录,`-ListFile` 供 git 钩子;文本扩展名白名单,不误伤 .webp 等二进制。
+2. `.githooks/pre-commit` + `git config core.hooksPath .githooks` — 提交时检查**本次暂存**的 .kt/.java/.xml/.md/.ps1 等,损坏即拒绝提交。
+3. `app/build.gradle.kts` — 新增 `:app:encodingCheck` 任务(扫描 app/src 文本文件),挂到 `preBuild`:每次构建前自动把关,坏文件直接 BUILD FAILED。
+- 事故残留归档:`app/.../service/` 下的 `FinanceAccessibilityService.kt.corrupt.bak` + `.repair-report.txt` 移入 `tools/accident-2026-09-06/`(gitignore 已覆盖,不进版本库;src 目录恢复纯净,只剩真实源码)。
+
+### P2 解析器纯函数化 + 单测(行为零改动,逐字搬运)
+- 新包 `app/src/main/java/com/example/finance/parsing/`(无 Android 依赖,纯 JVM 可测):
+  - `BillTimeParser.kt` — 支付时间解析(今天/昨天 [HH:mm]、yyyy 系、M月d日、MM-dd;无年份回看 2 年、10 分钟未来宽容)+ `extractRowTime`(行尾时间)+ `parseFlexible`(下单：前缀等混排);
+  - `MerchantText.kt` — 淘宝状态词表 / 店名噪声 / `normMerchant` 归一化 / 账单行噪声 / 就近商家查找;
+  - `BillAmountText.kt` — 金额正则(独立行/价格 token/支付宝"模式1"整行)+ 美团 ¥ 拆分节点合并 `mergeYuanTokens`(¥ 9 .9 → 9.9);
+  - `BillKeys.kt` — 引擎内去重键(`商家|金额|日`,金额**固定 Locale.US**:防小数逗号区域把同一笔格式成两种 key 破坏去重)+ 日志时间格式。
+- `FinanceAccessibilityService.kt`(2830 → 2692 行):原函数体全部改为同名一行委托,调用点零改动;`parseOrderListStyle` 改接 `mergeYuanTokens`,保留原语义(**拒单不跳游标、成单跳游标**);商家回查/状态词表等行为未动。
+- 单测 `app/src/test/java/com/example/finance/parsing/` 4 文件共 49 例(时间 19 / 商家 12 / 金额 11 / 去重键 5 + 存量 1),样本取自真机校准记录,固定注入 `nowMs`(与时钟、时区无关)。命令:`gradlew :app:testDebugUnitTest`。已全绿,`assembleDebug` 通过。
+- **行为对齐说明(bug-for-bug)**:MM-dd 当日"还没到点"的时刻(如 18:00 读到"09-06 18:30")按原引擎语义回退到去年同一时刻,测试已固化该行为;若要改进(判无效/宽容窗内保留)需真机立项验证,勿在抽取轮顺手改。
+- 说明:抽取只搬纯函数,`recordAt`/UI/抓取编排仍留服务内;剩余可测化对象(下单前判断词表、抓取页判定)留待后续轮次。
 
 ---
 
@@ -17,9 +38,9 @@
 
 ---
 
-## 【2026-09-06 夜 2】注释/日志乱码清理完成:全文件 0 处 � 残留
+## 【2026-09-06 夜 2】注释/日志乱码清理完成:全文件 0 处 U+FFFD 残留
 
-- 步骤:①脚本清除纯注释行与代码尾部注释内的 `�`/损坏 `?`(tools/strip_comments.ps1,清 206 行);②剩余 61 处日志字符串按词典前缀证据(`⏭ 实时[`/`✅ 实时[` 等)+上下文逐行定稿(tools/fixspec_logs.tsv,61+1 行);③assembleDebug 通过、全文件 U+FFFD 计数 = 0、注释无孤立 `?`。
+- 步骤:①脚本清除纯注释行与代码尾部注释内的 `U+FFFD`/损坏 `?`(tools/strip_comments.ps1,清 206 行);②剩余 61 处日志字符串按词典前缀证据(`⏭ 实时[`/`✅ 实时[` 等)+上下文逐行定稿(tools/fixspec_logs.tsv,61+1 行);③assembleDebug 通过、全文件 U+FFFD 计数 = 0、注释无孤立 `?`。
 - 装机验证:新 APK 已装(pid 21634),无障碍已连接。日志文案恢复如 `支付宝文字[模式1]: 入账 N，日期锚点 M…` 等。
 - 注:损坏字符本身不可逆(GBK 有损),恢复值为语义推断;个别注释用词可能非原文但通顺无误。
 
@@ -34,7 +55,7 @@
   3. 自动修复残余 ~70 行结构错误 → **按行号规格表人工定稿**(tools/fixspec*.tsv):四轮把编译错误 230+ → 0;
   4. 关键坑:①修复产物 `.fixed.kt` 若留在 src 目录会被当第二份源文件编译,报错全指它(删掉);②kotlinc 报的"缺 }"其实是**行内被误插的函数签名(多余 `{`)把后续成员全嵌套成局部函数**——用探针 `}` + 报错模式定位到杂行(2299 误插的 `private fun isProfilePage…`)删除即可;③正则恢复必须对照词典——"日"是**可选** `日?`,手写恢复成必选会导致美团 `下单：2026-09-02 10:54` 时间解析失败(支付宝行尾时间走 MM-dd 分支不受影响,易漏检)。
 - **真机验证(22:12,装机 pid 18164,无障碍已重开)**:支付宝 32 笔带真实时间;美团点「我的」→ profile veto 生效不再误判我的页 → 视觉点「我的订单」→ 订单列表 25 笔**全部带真实下单时间**(2026-06-19~09-02)。下单前判断/守卫词表均按损坏前状态恢复。
-- **遗留(仅观感)**:注释与少量日志文案仍有 �(约 110 行,不影响编译/功能);工具与损坏备份保留在 `tools/` 与 `FinanceAccessibilityService.kt.corrupt.bak`;完好旧 APK 备份 `Finance-phone-backup-2150.apk`。
+- **遗留(仅观感)**:注释与少量日志文案仍有 U+FFFD(约 110 行,不影响编译/功能);工具与损坏备份保留在 `tools/` 与 `FinanceAccessibilityService.kt.corrupt.bak`;完好旧 APK 备份 `Finance-phone-backup-2150.apk`。
 
 ---
 

@@ -1,6 +1,6 @@
 # 理伴(Finance)· 应用总结文档
 
-> 本文档基于当前仓库真实代码与真机验证记录整理(2026-09-06)。`README.md` / `ARCHITECTURE.md` 为早期版本,内容已过时,以本文档为准;逐轮开发日志见 `DEV_STATUS.md`(顶部为最新)。
+> 本文档基于当前仓库真实代码与真机验证记录整理(2026-09-07)。`README.md` / `ARCHITECTURE.md` 为早期版本,内容已过时,以本文档为准;逐轮开发日志见 `DEV_STATUS.md`(顶部为最新)。
 
 ---
 
@@ -63,9 +63,12 @@
 
 ```
 app/src/main/java/com/example/finance/
-├── service/FinanceAccessibilityService.kt   无障碍服务:实时感知 + 三平台历史抓取引擎 + 下单前判断 + 抓取UI(核心,最大)
+├── service/FinanceAccessibilityService.kt   无障碍服务:实时感知 + 三平台历史抓取引擎 + 下单前判断 + 抓取UI(核心;时间/金额/商家文本解析已抽至 parsing/)
 ├── ai/AIService.kt                          AI 编排:点评/周报/Top3/批量点评/视觉读屏;端侧规则兜底;adviceFlow
 ├── network/ModelAPIClient.kt                Ktor+OkHttp:DeepSeek chat/completions;文本与视觉消息;运行时配置注入
+├── parsing/                                 解析纯函数(2026-09-07 从 service 抽出,无 Android 依赖、可单测)
+│                                            BillTimeParser(支付时间) · MerchantText(店名/噪声) ·
+│                                            BillAmountText(金额/¥拆分合并) · BillKeys(去重键/日志时间)
 ├── data/
 │   ├── FinanceDb.kt                         Room v3:BillEntity(timeBucket 分钟去重)+ DAO + Migration
 │   ├── AccessibilityEventRepository.kt      事件总线(records/events/指令前缀)+ 入账合法性守卫 + postConsumption
@@ -109,11 +112,13 @@ adb shell am broadcast -a com.example.finance.TEST_CONFIGURE -n com.example.fina
 
 ---
 
-## 四、近期里程碑(2026-09-06,详见 DEV_STATUS)
+## 四、近期里程碑(2026-09-07 更新,详见 DEV_STATUS)
+
+0. **(2026-09-07)** P0 工程护栏 + P2 解析器测试化:编码三重防线(Check-Encoding.ps1 / git 预提交钩子 / Gradle encodingCheck 挂 preBuild)、事故残留归档 tools/accident-2026-09-06/、核心服务 2830→2692 行抽离 4 个纯解析对象,49 例 JUnit 全绿。
 
 1. **下单前判断修复 + 真机校准**:150→300 自底向上采集、CTA 先判、词表分层(强词留结算页特有词,「去结算/立即购买」降弱词)、feedMarkers 删「满减」加「月售」、商家名 45% 高度选择器、「我的」开关、命中/未判日志。
 2. **抓取链路修复**:「我的页」误判为订单列表(profile veto 修复)、支付宝「我的」页视觉兜底依赖 Key、90s 停滞看门狗、支付宝入口耐心重试、美团时间正则校准(`日?` 可选)。
-3. **源码事故与恢复(教训)**:误用 GBK 回写损坏 `FinanceAccessibilityService.kt`(无 git/无备份)→ 用最后一次编译的 `.class` 提取 941 条字符串词典 + `tools/RepairStrings.java` LCS 校准 + 规格表逐行定稿,全部编译错误清零并真机复验;随后清理注释/日志乱码至全文件 0 处 `�`。
+3. **源码事故与恢复(教训)**:误用 GBK 回写损坏 `FinanceAccessibilityService.kt`(无 git/无备份)→ 用最后一次编译的 `.class` 提取 941 条字符串词典 + `tools/RepairStrings.java` LCS 校准 + 规格表逐行定稿,全部编译错误清零并真机复验;随后清理注释/日志乱码至全文件 0 处 `U+FFFD`。
 4. **AI 链路复验 + 补齐**:实时点评/周报/视觉/批量点评全链路云端验证;补齐支付宝引擎"抓取后 AI 汇总点评"(原缺失,接入 ExternalAgg 金额/商家累计)。
 
 ---
@@ -129,7 +134,9 @@ adb shell am broadcast -a com.example.finance.TEST_CONFIGURE -n com.example.fina
 
 ---
 
-## 六、下一步建议(优先级)
+## 六、下一步建议(优先级;2026-09-07 更新)
+
+> ✅ 已完成:P0 编码护栏/提交纪律(git 钩子 + Gradle preBuild 双闸);P2 解析器纯函数化 + 49 例单测(时间/金额/店名/去重键,后续平台改版回归可先跑单测再上真机)。
 
 - **P1**:CSV 按月份/来源过滤 + FileProvider 系统分享(数据已真实可用,收益高)。
 - **P1(AI)**:AI 月报 + 环比趋势图(近30 vs 前30),首页趋势卡;或智能消费异常预警(超支/深夜/高频小额)。

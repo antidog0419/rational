@@ -55,6 +55,7 @@ app/src/main/java/com/example/finance/
 ├── service/FinanceAccessibilityService.kt  无障碍服务:实时感知 + 三平台历史抓取 + 下单前判断(核心)
 ├── ai/AIService.kt                          AI 编排:点评/周报/Top3/批量点评/视觉读屏 + 端侧兜底
 ├── network/ModelAPIClient.kt                DeepSeek HTTP 客户端(Key/模型/地址运行时配置)
+├── parsing/                                 解析纯函数:支付时间/金额(¥拆分)/店名噪声/去重键(2026-09-07 抽出,49 例单测)
 ├── data/                                    Room/预算/周报聚合/分类与来源/商家库/设置/事件仓库
 ├── ui/                                      首页 · 账单(记账本) · 我的 三 Tab(Compose)
 ├── utils/                                   悬浮窗管理、Key 加密(SecurePrefs)、启动器等
@@ -88,6 +89,14 @@ adb shell am broadcast -a com.example.finance.TEST_SIMULATE -n com.example.finan
 adb shell am broadcast -a com.example.finance.TEST_DUMP_SCREEN -n com.example.finance/.debug.DebugReceiver   # 页面结构 dump
 # 日志
 adb logcat -d 'FinanceAccessibility:V' 'FinanceUI:V' 'ModelAPI:V' '*:S'
+
+# 单元测试(解析纯函数,无需真机)
+.\gradlew.bat :app:testDebugUnitTest
+
+# 编码护栏(2026-09-07 起,防 GBK 误回写损坏源码)
+.\gradlew.bat :app:encodingCheck          # 每次构建已自动执行
+powershell -File tools/Check-Encoding.ps1 -ScanPath app\src   # 手动扫描
+git config core.hooksPath .githooks       # 已配置;提交时自动检查暂存文件
 ```
 
 ## 权限说明

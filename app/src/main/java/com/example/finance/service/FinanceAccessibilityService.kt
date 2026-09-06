@@ -21,6 +21,10 @@ import com.example.finance.data.ConsumptionRecord
 import com.example.finance.data.FinanceDb
 import com.example.finance.data.UserSettings
 import com.example.finance.ai.AIService
+import com.example.finance.parsing.BillAmountText
+import com.example.finance.parsing.BillKeys
+import com.example.finance.parsing.BillTimeParser
+import com.example.finance.parsing.MerchantText
 import com.example.finance.utils.FloatingWindowManager // 新增导入
 import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
@@ -64,8 +68,8 @@ class FinanceAccessibilityService : AccessibilityService() {
  /** 下单前判断：text/desc 各最多采集的 token 数（结算页底CTA 不能被顶部条目挤掉；15000*/
         const val JUDGE_TOKEN_CAP = 300
 
- /** 行内金额样式¥12.00 / ¥12.00 / -12.00 / +¥88.50 */
-        private val BILL_AMOUNT_REGEX = Regex("""^[+-]?\s*[¥￥]?\s*([0-9]{1,5}\.[0-9]{2})$""")
+ /** 行内金额样式¥12.00 / ¥12.00 / -12.00 / +¥88.50（规则本体见 parsing/BillAmountText.kt） */
+        private val BILL_AMOUNT_REGEX = BillAmountText.AMOUNT_LINE_REGEX
     }
 
     private val processedRecords = mutableSetOf<String>()
@@ -715,38 +719,26 @@ class FinanceAccessibilityService : AccessibilityService() {
         seen: MutableSet<String>,
         agg: ExternalAgg
     ): Int {
-        val amountTokens = texts.mapIndexed { idx, s -> idx to s.trim() }
+        val values = texts.map { it.trim() }
         var added = 0
         var timeCursorMs: Long? = null
         var i = 0
-        while (i < amountTokens.size) {
-            val (idx, t) = amountTokens[i]
- // 纯日时间作为其后各笔账单支付时间"锚点
+        while (i < values.size) {
+            val t = values[i]
+            // 纯日期时间作为其后各笔账单的支付时间锚点
             parseTimeFlexible(t)?.let { timeCursorMs = it }
             if (t == "¥" || t == "￥") {
-                // 组金额：¥ [整数] [.小数]
-                var amountStr = ""
-                var j = i + 1
-                val intTok = amountTokens.getOrNull(j)?.second ?: ""
-                if (intTok.matches(Regex("""\d{1,4}"""))) {
-                    amountStr = intTok
-                    j++
-                }
-                val fracTok = amountTokens.getOrNull(j)?.second ?: ""
-                if (fracTok.matches(Regex("""\.\d{1,2}"""))) {
-                    amountStr = if (amountStr.isEmpty()) "0$fracTok" else amountStr + fracTok
-                    j++
-                }
-                val amount = amountStr.toDoubleOrNull()
-                if (amount != null && amount > 0.0) {
- // 商家：从 ¥ 往前找最近一已完待评待付之前的店
+                // 组金额：¥ [整数] [.小数]（拆分节点合并规则见 parsing/BillAmountText.mergeYuanTokens）
+                val (amount, next) = BillAmountText.mergeYuanTokens(values, i)
+                if (amount != null) {
+                    // 商家：从 ¥ 往前找最近一条"已完成/待评价/待付款"状态之前的店名
                     var merchant = "未知商家"
-                    var k = idx - 1
+                    var k = i - 1
                     while (k >= 0) {
-                        val tk = texts[k].trim()
+                        val tk = values[k]
                         if (tk.contains("已完成") || tk.contains("待评价") || tk.contains("待付款")) {
-                            if (k - 1 >= 0 && texts[k - 1].trim().length in 2..30) {
-                                merchant = texts[k - 1].trim()
+                            if (k - 1 >= 0 && values[k - 1].length in 2..30) {
+                                merchant = values[k - 1]
                             }
                             break
                         }
@@ -762,7 +754,7 @@ class FinanceAccessibilityService : AccessibilityService() {
                         agg.merchants[merchant] = agg.merchants.getOrDefault(merchant, 0.0) + amount
                         added++
                     }
-                    i = j
+                    i = next
                     continue
                 }
             }
@@ -773,31 +765,14 @@ class FinanceAccessibilityService : AccessibilityService() {
 
  // ============== 淘宝订单卡解析（desc 店名/状+ 真实 text 实付金额==============
 
-    private val tbStatusWords = listOf(
-        "已送达", "已完成", "已收货", "交易成功", "已评价", "待评价", "待付款", "待发货", "待收货", "待使用",
-    )
+    /** 淘宝状态词表（规则本体见 parsing/MerchantText.kt） */
+    private val tbStatusWords: List<String> = MerchantText.TB_STATUS_WORDS
 
- /** 店名噪声过滤（按金额/条目说明等） */
-    private fun isTbBrandNoise(desc: String): Boolean {
-        if (desc.length < 2 || desc.length > 26) return true
-        return listOf(
-            "订单", "实付", "¥", "×", "下单", "购买", "拼单", "默认", "理赔", "赔付", "慢必赔", "删除",
-            "评价", "再买", "退款", "售后", "投诉", "签到", "图片", "商品", "加载", "更多", "搜索",
-            "筛选", "管理", "消息", "返回", "释放", "已送达", "已完成", "订单号", "门店", "包装"
-        ).any { desc.contains(it) } || desc.matches(Regex("""\d[\d.¥]*"""))
-    }
+    /** 店名噪声过滤（规则本体见 parsing/MerchantText.isTbBrandNoise） */
+    private fun isTbBrandNoise(desc: String): Boolean = MerchantText.isTbBrandNoise(desc)
 
- /** 归一化店名：去掉括号分店/后缀分隔符，用于跨平淘宝↔支付宝)匹配 */
-    private fun normMerchant(raw: String): String {
-        var r = raw.trim().lowercase()
-        r = r.replace(Regex("""[(（][^)）]*[)）]"""), "")                 // (海洋大学店) 等括号内文本
-        r = r.replace(Regex("""外卖订单|外送订单|订单|海洋大学店|海大店|湖光岩店|海大湖畔食堂店|商中美食城|第\s*\d+\s*档口|门店|美食城"""), "")
-            r = r.replace(Regex("""[·・，。、\s'"]"""), "")
-            return r
-        }
-        
-        
-    
+    /** 归一化店名：规则本体见 parsing/MerchantText.normMerchant */
+    private fun normMerchant(raw: String): String = MerchantText.normMerchant(raw)
 
     /**
  * 解析淘宝订单卡并入账
@@ -822,7 +797,7 @@ class FinanceAccessibilityService : AccessibilityService() {
             val d = node.contentDescription?.toString()?.trim() ?: ""
             val x0 = r.left
             val x1 = r.right
-            val priceM = Regex("""^[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)$""").find(t)
+            val priceM = BillAmountText.PRICE_TOKEN_REGEX.find(t)
             if (priceM != null) {
                 prices.add(Node(cy, x0, x1, priceM.groupValues[1]))
                 return
@@ -1898,7 +1873,7 @@ class FinanceAccessibilityService : AccessibilityService() {
         var anchorCount = 0
         var timeCursorMs: Long? = null
  // 模式1：一行式 "商家名，-12.34；日期标题行在循环里顺带作为时间锚点
-        val inline = Regex("""^(.{1,40}?)，\s*([-+])?\s*[¥￥]?\s*([0-9]+(?:\.[0-9]{1,2})?)元""")
+        val inline = BillAmountText.ROW_INLINE_YUAN_REGEX
         for (raw in texts) {
             val t = raw.trim()
             if (t.isEmpty()) continue
@@ -1951,35 +1926,11 @@ class FinanceAccessibilityService : AccessibilityService() {
     }
 
     /** 在金额文本之前寻找最近的"商家/说明"文本 */
-    private fun findMerchantNear(texts: List<String>, amountIndex: Int): String? {
-        var j = amountIndex - 1
-        var skip = 0
-        while (j >= 0 && skip < 4) {
-            val t = texts[j].trim()
-            if (t.isEmpty() || BILL_AMOUNT_REGEX.matches(t) || isNoiseText(t)) {
-                skip++
-                j--
-                continue
-            }
-            return t.take(24)
-        }
-        return null
-    }
+    private fun findMerchantNear(texts: List<String>, amountIndex: Int): String? =
+        MerchantText.findMerchantNear(texts, amountIndex)
 
  /** 账单行之间的非商家噪声（日期/分类/状导航/额度等） */
-    private fun isNoiseText(t: String): Boolean {
-        if (t.length > 24) return true
-        return t.contains("账单") || t.contains("今天") || t.contains("昨天") ||
-                t.contains("星期") || t.contains("月") && t.any { it.isDigit() } ||
-                t.contains("全部") || t.contains("收入") || t.contains("支出") ||
-                t.contains("退款") || t.contains("更多") || t.contains("余额") ||
-                t.contains("额度") || t.contains("应还") || t.contains("立即") ||
-                t.contains("还款") || t.contains("我的省钱") || t.contains("总计") ||
-                t.contains("贴纸") || t.contains("本月已省") || t.contains("账单月报") ||
-                t.contains("收支分析") || t.contains("生活号") || t.contains("花呗金") || t.contains("分期") ||
-            t.matches(Regex("""\d{1,2}:\d{2}""")) || t.matches(Regex("""\d{4}-\d{2}-\d{2}""")) ||
-                t.contains("转账") || t.contains("红包") || t.contains("搜索")
-    }
+    private fun isNoiseText(t: String): Boolean = MerchantText.isNoiseText(t)
 
  // ============== 支付时间提取（历史账单抓取：按每笔真实付费时间入账，不再全部记为"抓取当天"==============
 
@@ -1994,121 +1945,30 @@ class FinanceAccessibilityService : AccessibilityService() {
     }
 
  /** 诊断日志用：毫秒 "yyyy-MM-dd HH:mm"，null " */
-    private fun fmtTimeForLog(ms: Long?): String =
-        ms?.let { java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
-            .format(java.util.Date(it)) } ?: "--"
+    private fun fmtTimeForLog(ms: Long?): String = BillKeys.fmtForLog(ms)
 
  /** 引擎内去重键：加发生，同商家同金额、不同天支付的账单不再被误合*/
-    private fun seenKeyFor(merchant: String, amount: Double, timeMs: Long?): String {
-        val day = timeMs?.let {
-            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                .format(java.util.Date(it))
-        } ?: "unknown"
-        return "$merchant|${"%.2f".format(amount)}|$day"
-    }
+    private fun seenKeyFor(merchant: String, amount: Double, timeMs: Long?): String =
+        BillKeys.seenKey(merchant, amount, timeMs)
 
     /**
  * 解析账单日期分组标题里的"支付时间"文本 本地毫秒；解析不到返null
  * 支持：今昨天 [HH:mm]、yyyy[-/年]M[-/月]d[日] [HH:mm]、M月d日[(周X)] [HH:mm]
  * 规则：明显未来时间视为无效；无年份的 M月d最近一次不晚于今天"（跨年自动前推）
      */
-    private fun parseBillTimeText(raw: String?): Long? {
-        val t = (raw ?: "").trim()
-        if (t.isEmpty() || t.length > 40) return null
-        val now = java.util.Calendar.getInstance()
-        val nowMs = System.currentTimeMillis()
-        val curY = now.get(java.util.Calendar.YEAR)
- // 宽容 10 分钟，避今天 xx:xx"刚好未到时分被误判未
-        val tolerance = 10 * 60_000L
-
-        fun daysInMonth(y: Int, mo: Int): Int {
-            val c = java.util.Calendar.getInstance()
-            c.clear()
-            c.set(y, mo - 1, 1)
-            return c.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
-        }
-        fun build(y: Int, mo: Int, d: Int, h: Int, mi: Int): Long {
-            val cal = java.util.Calendar.getInstance()
-            cal.clear()
-            cal.set(y, mo - 1, d, h, mi, 0)
-            cal.set(java.util.Calendar.MILLISECOND, 0)
-            return cal.timeInMillis
-        }
-        fun ok(y: Int, mo: Int, d: Int, h: Int, mi: Int): Boolean =
-            y in 2000..curY && mo in 1..12 && d in 1..daysInMonth(y, mo) && h in 0..23 && mi in 0..59
-
-        // 1) 今天 / 昨天 [+ HH:mm]
-        Regex("""^(今天|昨天)(?:\s*(\d{1,2}):(\d{2}))?$""").find(t)?.let { m ->
-            val cal = java.util.Calendar.getInstance()
-            if (m.groupValues[1] == "昨天") cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
-            val h = m.groupValues[2].toIntOrNull() ?: 12
-            val mi = m.groupValues[3].toIntOrNull() ?: 0
-            if (h !in 0..23 || mi !in 0..59) return null
-            cal.set(java.util.Calendar.HOUR_OF_DAY, h)
-            cal.set(java.util.Calendar.MINUTE, mi)
-            cal.set(java.util.Calendar.SECOND, 0)
-            cal.set(java.util.Calendar.MILLISECOND, 0)
-            val ms = cal.timeInMillis
-            return if (ms <= nowMs + tolerance) ms else null
-        }
- // 2) yyyy年M月d/ yyyy-MM-dd / yyyy/M/d [+ HH:mm]
-        Regex("""^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})日?(?:\s*(\d{1,2}):(\d{2}))?$""").find(t)?.let { m ->
-            val y = m.groupValues[1].toIntOrNull() ?: return null
-            val mo = m.groupValues[2].toIntOrNull() ?: return null
-            val d = m.groupValues[3].toIntOrNull() ?: return null
-            val h = m.groupValues[4].toIntOrNull() ?: 12
-            val mi = m.groupValues[5].toIntOrNull() ?: 0
-            if (!ok(y, mo, d, h, mi)) return null
-            val ms = build(y, mo, d, h, mi)
-            return if (ms <= nowMs + tolerance) ms else null
-        }
- // 3) M月d[(周X|星期X)] [+ HH:mm] —无年份：从今年往前找最近一今天
-        Regex("""^(\d{1,2})月(\d{1,2})日(?:\s*(?:周[一二三四五六日天]|星期[一二三四五六日天]))?(?:\s*(\d{1,2}):(\d{2}))?$""")
-            .find(t)?.let { m ->
-                val mo = m.groupValues[1].toIntOrNull() ?: return null
-                val d = m.groupValues[2].toIntOrNull() ?: return null
-                val h = m.groupValues[3].toIntOrNull() ?: 12
-                val mi = m.groupValues[4].toIntOrNull() ?: 0
-                if (mo !in 1..12 || d !in 1..daysInMonth(curY, mo) || h !in 0..23 || mi !in 0..59) return null
-                for (back in 0..2) {
-                    val ms = build(curY - back, mo, d, h, mi)
-                    if (ms <= nowMs + tolerance) return ms
-                }
-                return null
-            }
- // 4) MM-dd [HH:mm]（如 09-04 22:14，支付宝账单行尾常见；无年份：取最近一今天，跨年自动往前找
-        Regex("""^(\d{2})-(\d{2})(?:\s*(\d{1,2}):(\d{2}))?$""").find(t)?.let { m ->
-            val mo = m.groupValues[1].toIntOrNull() ?: return null
-            val d = m.groupValues[2].toIntOrNull() ?: return null
-            val h = m.groupValues[3].toIntOrNull() ?: 12
-            val mi = m.groupValues[4].toIntOrNull() ?: 0
-            if (mo !in 1..12 || d !in 1..daysInMonth(curY, mo) || h !in 0..23 || mi !in 0..59) return null
-            for (back in 0..2) {
-                val ms = build(curY - back, mo, d, h, mi)
-                if (ms <= nowMs + tolerance) return ms
-            }
-            return null
-        }
-        return null
-    }
+    /** 解析账单日期/时间文本 → 本地毫秒（规则本体见 parsing/BillTimeParser.parse） */
+    private fun parseBillTimeText(raw: String?): Long? = BillTimeParser.parse(raw)
 
     /**
  * 支付宝账单行合并文本节点"：整= 商家金额元，，分类，，支付时间
  * 时间在行今天 14:42 / 昨天 21:26 / 09-04 22:14 / 2024-07-15 12:30
  * 这里扫整行取【最后一个】时间短语交parseBillTimeText 解析
      */
-    private fun extractRowTime(row: String): Long? {
-        val matcher = Regex(
-            """今天\s*\d{1,2}:\d{2}|昨天\s*\d{1,2}:\d{2}|""" +
-                    """\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?(?:\s*\d{1,2}:\d{2})?|""" +
-                    """\d{1,2}月\d{1,2}日(?:\s*\d{1,2}:\d{2})?|\d{2}-\d{2}(?:\s*\d{1,2}:\d{2})?"""
-        ).findAll(row).lastOrNull()?.value ?: return null
-        return parseBillTimeText(matcher)
-    }
+    /** 扫整行取【最后一个】时间短语解析（规则本体见 parsing/BillTimeParser.extractRowTime） */
+    private fun extractRowTime(row: String): Long? = BillTimeParser.extractRowTime(row)
 
- /** 容忍带前缀/混排的文本（下单026-09-02 10:54"09-04 22:14"等）：整串匹配失败则扫行内时间短*/
-    private fun parseTimeFlexible(raw: String?): Long? =
-        parseBillTimeText(raw) ?: extractRowTime(raw ?: "")
+    /** 容忍带前缀/混排的文本：整串匹配失败则扫行内时间短语（本体见 parsing/BillTimeParser.parseFlexible） */
+    private fun parseTimeFlexible(raw: String?): Long? = BillTimeParser.parseFlexible(raw)
 
  /** 向上滑动一屏（从屏72% 高度滑到 30%*/
     private fun swipeUp(): Boolean {
@@ -2314,7 +2174,7 @@ class FinanceAccessibilityService : AccessibilityService() {
                 if (scannedAmt++ > 400) return
                 val t = node.text?.toString()?.trim() ?: ""
                 if (t.isNotEmpty()) {
-                    val m = Regex("""^[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)$""").find(t)
+                    val m = BillAmountText.PRICE_TOKEN_REGEX.find(t)
                     if (m != null) {
                         val r = android.graphics.Rect()
                         runCatching { node.getBoundsInScreen(r) }
