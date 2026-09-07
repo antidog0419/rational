@@ -2218,7 +2218,7 @@ class FinanceAccessibilityService : AccessibilityService() {
                     if (m != null) {
                         val r = android.graphics.Rect()
                         runCatching { node.getBoundsInScreen(r) }
-                        if (!r.isEmpty && r.top <= r.bottom) {
+                        if (!r.isEmpty && r.top >= 0 && r.bottom <= h) { // 只收屏幕可视区内金额
                             m.groupValues[1].toDoubleOrNull()?.let { amounts.add(it to r.centerY()) }
                             return
                         }
@@ -2227,8 +2227,37 @@ class FinanceAccessibilityService : AccessibilityService() {
                 for (i in 0 until node.childCount) node.getChild(i)?.let { scanAmt(it) }
             }
             try { scanAmt(root) } catch (t: Throwable) { /* 忽略 */ }
+            if (amounts.isEmpty()) {
+                // 兜底：实付常与按钮/文案同行（如"极速支付 ¥29.88"），不是独立 ¥ 节点；
+                // 排除券前/共减/立减/原价/运费等非应付金额行
+                val inline = Regex("""[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)""")
+                val noise = listOf("券前", "共减", "立减", "已减", "原价", "运费", "打包", "配送", "起送", "红包")
+                var scanned2 = 0
+                fun scanAmt2(node: android.view.accessibility.AccessibilityNodeInfo) {
+                    if (scanned2++ > 400) return
+                    val t = node.text?.toString()?.trim() ?: ""
+                    if (t.isNotEmpty() && noise.none { t.contains(it) }) {
+                        val m = inline.find(t)
+                        if (m != null) {
+                            val r = android.graphics.Rect()
+                            runCatching { node.getBoundsInScreen(r) }
+                            if (!r.isEmpty && r.top >= 0 && r.bottom <= h) {
+                                m.groupValues[1].toDoubleOrNull()?.let { amounts.add(it to r.centerY()) }
+                                return
+                            }
+                        }
+                    }
+                    for (i in 0 until node.childCount) node.getChild(i)?.let { scanAmt2(it) }
+                }
+                try { scanAmt2(root) } catch (t: Throwable) { /* 忽略 */ }
+            }
             val amount = (amounts.filter { it.second > h * 0.45f }.maxByOrNull { it.second }
                 ?: amounts.maxByOrNull { it.second })?.first ?: return@launch
+            Log.d(
+                TAG,
+                "🛒 金额候选(可见, 底→上): " + amounts.sortedByDescending { it.second }
+                    .take(6).joinToString { a -> "¥" + "%.2f".format(a.first) + "@y" + a.second }
+            )
             val merchant = pickMerchantName(root, markers, h) ?: "待下单商品"
 
             val key = "$pkg|$merchant|$amount"
