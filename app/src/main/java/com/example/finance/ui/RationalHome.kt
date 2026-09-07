@@ -355,9 +355,14 @@ private fun InterveneDialog(
                 val catLabel = latest?.merchant?.take(14) ?: "本次消费"
                 Text("本次消费后本月「$cat」预算", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("剩余 $remainPct%", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black,
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("剩余 $remainPct%", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { (remainPct / 100f).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp)
+                )
 
                 Spacer(modifier = Modifier.height(14.dp))
                 ReasonLine("🧪", "72 小时复购率", "89%")
@@ -368,7 +373,7 @@ private fun InterveneDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("确认本次") }
+                    Button(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("长按确认本次") }
                     OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("稍后再加购") }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -387,9 +392,12 @@ private fun InterveneDialog(
 
 @Composable
 private fun ReasonLine(icon: String, title: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(icon, style = MaterialTheme.typography.titleSmall)
-        Spacer(modifier = Modifier.width(8.dp))
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier.size(28.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center
+        ) { Text(icon, style = MaterialTheme.typography.labelMedium) }
+        Spacer(modifier = Modifier.width(10.dp))
         Text(title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.weight(1f))
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
@@ -459,7 +467,10 @@ private fun WhyDialog(
 @Composable
 private fun WhyBlock(icon: String, title: String, desc: String) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        Text(icon, style = MaterialTheme.typography.titleMedium)
+        Box(
+            modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+            contentAlignment = Alignment.Center
+        ) { Text(icon, style = MaterialTheme.typography.labelMedium) }
         Spacer(modifier = Modifier.width(10.dp))
         Column {
             Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
