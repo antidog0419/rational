@@ -2,6 +2,23 @@
 
 ---
 
+## 【2026-09-07 19:00】sult_liban 识屏智能体整合(feat/sult-integration 分支,待人工走查后定合并)
+
+> 仓库: [KnightKanox/sult_liban](https://github.com/KnightKanox/sult_liban)(MIT) — 另一版"理伴"比赛实现:MediaProjection+MLKit OCR+技能决策+智谱比价。按用户决策以**方案① 能力整合**移植为"第二条感知通道 + 决策大脑",UI 保持蓝版理伴。
+
+- **已移植**(全部在 `com.example.finance.*`,包名改写+适配):
+  - `scene/` 购物场景模型(Product/PriceInfo/SceneSignals/分金额)+ ProductText;
+  - `ocr/` MLKit 中文 OCR + OCR 几何行序合并 + 场景解析(商品/价格/型号/促销信号) + LLM 场景提取校验;
+  - `skill/` 技能引擎(预算占用/储蓄目标延迟/30天同类/冲动信号);`agent/` 决策引擎 + 价格证据分析 + 编排器 + AnalysisBus + DeepSeek 统一估价(智谱搜索代码保留不启用);
+  - `capture/` MediaProjection 悬浮球识屏服务(理伴蓝配色,API<29 门控);`config/` DataStore 加密配置(Keystore 不可用明文回退,同 SecurePrefs 策略);`data/` 独立 Room `agent.db`(画像/目标/决策/交易/比价缓存/诊断,不动 finance.db);
+  - `AgentGraph` DI:启动用 **BudgetStore+FinanceDb 真实数据**播种画像/储蓄目标,并**自动同步「我的→DeepSeek 云设置」**(默认模型 deepseek-v4-flash)。
+- **UI 接线**:「我的」页新增「🧭 识屏助手」卡 — 开始/停止识屏(悬浮窗→通知→系统录屏弹窗授权链)、LLM 开关、DeepSeek 同步状态+按钮、**手动分析演示**(离线技能决策,真机验证:索尼 ¥2999 → HIGH/DELAY,占用预算205%/目标延后46天)、最近决策预览。
+- **真机验证**:进程/播种 ✅(预算¥2000 已花¥535.15 目标¥12000)、离线决策全状态机 ✅、DeepSeek(v4-flash) 估价链路 ✅(对该品 UNKNOWN=模型安全拒答,理由透传,无崩溃)、Key 加密回退 ✅(本机 Keystore 不可用)。测试广播: `TEST_AGENT_STATUS` / `TEST_AGENT_TEST`(debug 包)。
+- **单测**:移植至 16 套件 **119 例全绿**(scene/ocr/skill/agent 解析与决策行为锁定,含真实 OCR 样本夹具)。
+- **待办**:①人工走查完整录屏链路(需用户点系统「立即开始」+ 首次 MLKit 模型下载);②走查通过后再决定合并 main。
+
+---
+
 ## 【2026-09-07 17:00】2024 年份疑点排查:一次性捕捉瞬态,清库重抓未复现
 
 - **现象**:16:41 a681b64 抓取后,全库 41 条中有 **8 条时间为 2024 年**(转账0.01/韦小堡7.96/超市7.33→2024-09-0x,超市48.20/益禾堂×3/花呗1391.58→2024-08-31),且同商家另有 2026"正确"版本 → 疑似重复入库。
