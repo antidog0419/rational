@@ -15,6 +15,7 @@ import com.example.finance.data.FinanceDb
 import com.example.finance.data.SavingGoalEntity
 import com.example.finance.data.UserProfileEntity
 import com.example.finance.data.monthRange
+import com.example.finance.data.UserSettings
 import com.example.finance.ocr.MlKitChineseOcrProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -87,5 +88,23 @@ object AgentGraph {
             currentCents = 0,
             deadlineEpochDay = LocalDate.now().plusMonths(6).toEpochDay(),
         )
+    }
+
+    /**
+     * 统一用 DeepSeek：把「我的 → DeepSeek 配置」同步为识屏 LLM（场景提取 + 模型估价）。
+     * 识别/估价不再依赖智谱搜索 Key（搜索分支保留代码，未配置即跳过）。
+     */
+    suspend fun syncLlmFromFinance(context: Context) = withContext(Dispatchers.IO) {
+        init(context)
+        val s = UserSettings(context.applicationContext)
+        val key = s.deepseekApiKey
+        if (key.isNotBlank()) {
+            val base = s.deepseekBaseUrl.ifBlank { "https://api.deepseek.com" }
+            configRepository.saveLlm(
+                base.trimEnd('/') + "/v1/chat/completions",
+                key,
+                s.deepseekModel.ifBlank { "deepseek-chat" },
+            )
+        }
     }
 }

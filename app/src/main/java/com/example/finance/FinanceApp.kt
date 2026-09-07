@@ -45,11 +45,13 @@ class FinanceApp : Application() {
         val db = FinanceDb.init(this)
         AccessibilityEventRepository.attachDb(db)
 
-        // 识屏智能体（移植自 sult_liban）：初始化 DI + 用真实预算/账单播种默认画像
+        // 识屏智能体（移植自 sult_liban）：初始化 DI + 用真实预算/账单播种 + 同步 DeepSeek 配置
         AgentGraph.init(this)
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { AgentGraph.seedFromFinance(this@FinanceApp) }
-                .onFailure { Log.e("FinanceApp", "识屏智能体初始化失败", it) }
+                .onFailure { Log.e("FinanceApp", "识屏智能体播种失败", it) }
+            runCatching { AgentGraph.syncLlmFromFinance(this@FinanceApp) }
+                .onFailure { Log.e("FinanceApp", "识屏 LLM 同步失败", it) }
         }
 
         // 一次性来源归一化（老库里的 "支付宝账单/美团账单/本地演示" → 规范名），IO 后台执行

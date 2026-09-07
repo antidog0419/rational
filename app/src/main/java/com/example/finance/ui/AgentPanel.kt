@@ -59,18 +59,13 @@ fun AgentPanel(modifier: Modifier = Modifier) {
     // 运行中?（通过前台服务判定：读 AnalysisBus 太粗，用服务自状态不可靠，改为由按钮态提示）
     var captureRunning by remember { mutableStateOf(false) }
 
-    // 配置（首次从 DataStore 读一次）
-    var searchKeyInput by remember { mutableStateOf("") }
-    var searchEngineInput by remember { mutableStateOf("search_pro_quark") }
+    // 配置（读取一次；DeepSeek 自动同步自「我的 → DeepSeek 云设置」）
     var llmOcrEnabled by remember { mutableStateOf(true) }
-    var readerEnabled by remember { mutableStateOf(true) }
-    var configLoaded by remember { mutableStateOf(false) }
+    var llmSyncNote by remember { mutableStateOf("正在读取…") }
     LaunchedEffect(Unit) {
         val cfg = AgentGraph.configRepository.configuration.first()
-        searchEngineInput = cfg.searchEngine
         llmOcrEnabled = cfg.llmOcrEnabled
-        readerEnabled = cfg.readerEnabled
-        configLoaded = true
+        llmSyncNote = llmSyncLabel(cfg)
     }
 
     // 手动分析输入
@@ -128,26 +123,28 @@ fun AgentPanel(modifier: Modifier = Modifier) {
         captureRunning = false
     }
 
-    fun saveAgentConfig() {
+    fun syncDeepSeek() {
         scope.launch(Dispatchers.IO) {
             runCatching {
-                // LLM 复用「我的 → DeepSeek 配置」；搜索为智谱 Key
-                val ds = settings.deepseekApiKey
-                val base = settings.deepseekBaseUrl.ifBlank { "https://api.deepseek.com" }
-                AgentGraph.configRepository.save(
-                    llmEndpoint = base.trimEnd('/') + "/v1/chat/completions",
-                    llmApiKey = ds.ifBlank { null },
-                    llmModel = settings.deepseekModel.ifBlank { "deepseek-chat" },
-                    searchBaseUrl = "https://open.bigmodel.cn/api",
-                    searchApiKey = searchKeyInput.takeIf { it.isNotBlank() },
-                    searchEngine = searchEngineInput.ifBlank { "search_pro_quark" },
-                    readerEnabled = readerEnabled,
-                    llmOcrEnabled = llmOcrEnabled,
-                )
-            }.onSuccess {
-                AnalysisBus.update(com.example.finance.scene.AnalysisState.Error("识屏配置已保存（Key 加密存储）"))
+                AgentGraph.syncLlmFromFinance(context)
+                val cfg = AgentGraph.configRepository.configuration.first()
+                llmSyncNote = llmSyncLabel(cfg)
             }.onFailure {
-                AnalysisBus.update(com.example.finance.scene.AnalysisState.Error("保存失败：${it.message}"))
+                llmSyncNote = "同步失败：${it.message}"
+            }
+        }
+    }
+
+    fun setLlmOcr(value: Boolean) {
+        llmOcrEnabled = value
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                val cfg = AgentGraph.configRepository.configuration.first()
+                AgentGraph.configRepository.save(
+                    cfg.llmEndpoint, cfg.llmApiKey, cfg.llmModel,
+                    cfg.searchBaseUrl, cfg.searchApiKey, cfg.searchEngine,
+                    cfg.readerEnabled, value,
+                )
             }
         }
     }
@@ -157,6 +154,7 @@ fun AgentPanel(modifier: Modifier = Modifier) {
         manualBusy = true
         manualResult = null
         scope.launch(Dispatchers.IO) {
+            runCatching { AgentGraph.syncLlmFromFinance(context) } // 每次分析前同步 DeepSeek
             val cents = parseYuanToCents(manualPriceYuan.trim())
             if (cents == null) {
                 manualResult = "价格格式无效"
@@ -233,37 +231,20 @@ fun AgentPanel(modifier: Modifier = Modifier) {
 
             HorizontalDivider()
 
-            // 配置
-            Text("配置", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            // 配置（统一 DeepSeek）
+            Text("配置 · 统一 DeepSeek", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("LLM 场景提取（复用 DeepSeek）", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                Switch(checked = llmOcrEnabled, onCheckedChange = { llmOcrEnabled = it })
+                Text("LLM 场景提取 / 价格估价", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                Switch(checked = llmOcrEnabled, onCheckedChange = ::setLlmOcr)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("联网比价与网页阅读（智谱）", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                Switch(checked = readerEnabled, onCheckedChange = { readerEnabled = it })
+            Text(llmSyncNote, style = MaterialTheme.typography.labelSmall,
+                color = if (llmSyncNote.startsWith("DeepSeek 已同步"))
+                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+            OutlinedButton(onClick = ::syncDeepSeek, modifier = Modifier.fillMaxWidth()) {
+                Text("立即同步「我的 → DeepSeek 云设置」")
             }
-            OutlinedTextField(
-                value = searchEngineInput,
-                onValueChange = { searchEngineInput = it },
-                label = { Text("智谱搜索引擎") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = searchKeyInput,
-                onValueChange = { searchKeyInput = it },
-                label = { Text("智谱 API Key（用于比价；留空=仅本地决策）") },
-                singleLine = true,
-                visualTransformation = if (searchKeyInput.isNotEmpty()) PasswordVisualTransformation()
-                else VisualTransformation.None,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Button(onClick = ::saveAgentConfig, modifier = Modifier.fillMaxWidth()) { Text("保存识屏配置") }
-            if (!configLoaded) {
-                Text("读取配置中…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-            }
+            Text("识别与估价统一使用你的 DeepSeek Key（启动/手动分析时自动同步，不再需要智谱）；估价为模型知识参考，非实时成交价。",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
 
             HorizontalDivider()
 
@@ -313,6 +294,10 @@ fun AgentPanel(modifier: Modifier = Modifier) {
         }
     }
 }
+
+private fun llmSyncLabel(cfg: com.example.finance.config.ApiConfiguration): String =
+    if (cfg.llmConfigured) "DeepSeek 已同步：模型 ${cfg.llmModel}（${cfg.llmApiKey.take(6)}***）"
+    else "尚未同步 DeepSeek：请先在「我的 → DeepSeek 云设置」填入 API Key 并保存"
 
 private fun stateText(s: com.example.finance.scene.AnalysisState): String = when (s) {
     is com.example.finance.scene.AnalysisState.Idle -> "空闲：开始识屏后，在购物页点悬浮球即可分析"

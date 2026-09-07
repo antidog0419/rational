@@ -152,6 +152,7 @@ class DebugReceiver : BroadcastReceiver() {
             ACTION_AGENT_TEST -> {
                 CoroutineScope(Dispatchers.IO).launch {
                     runCatching {
+                        com.example.finance.agent.AgentGraph.syncLlmFromFinance(context) // 每次测试前同步 DeepSeek
                         com.example.finance.agent.AgentGraph.seedFromFinance(context)
                         val scene = com.example.finance.scene.SceneContext(
                             sceneType = "manual_test",

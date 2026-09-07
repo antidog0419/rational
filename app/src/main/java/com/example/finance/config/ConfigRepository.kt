@@ -116,6 +116,16 @@ class ConfigRepository(private val context: Context, private val preset: ApiConf
         }
     }
 
+    /** 只写 LLM 部分（DeepSeek）：识别与估价统一复用理伴的 DeepSeek 配置，不再需要智谱 Key。 */
+    suspend fun saveLlm(llmEndpoint: String, llmApiKey: String?, llmModel: String) {
+        initializePresets()
+        context.configDataStore.edit { values ->
+            values[LLM_ENDPOINT] = llmEndpoint.trim().trimEnd('/')
+            values[LLM_MODEL] = llmModel.trim()
+            llmApiKey?.takeIf { it.isNotBlank() }?.let { values[LLM_KEY] = crypto.encrypt(it.trim()) }
+        }
+    }
+
     suspend fun clearLlm() = context.configDataStore.edit {
         it.remove(LLM_ENDPOINT); it.remove(LLM_MODEL); it.remove(LLM_KEY)
         it[PRESETS_INITIALIZED] = true
