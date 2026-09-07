@@ -69,6 +69,9 @@ app/src/main/java/com/example/finance/
 ├── parsing/                                 解析纯函数(2026-09-07 从 service 抽出,无 Android 依赖、可单测)
 │                                            BillTimeParser(支付时间) · MerchantText(店名/噪声) ·
 │                                            BillAmountText(金额/¥拆分合并) · BillKeys(去重键/日志时间)
+├── scene/ ocr/ skill/ agent/ capture/ config/   识屏智能体(2026-09-07 移植自 sult_liban,MIT):MediaProjection 录屏
+│                                            + MLKit 中文 OCR + 技能决策(预算/储蓄目标/冲动) + DeepSeek 估价;AgentGraph 单例
+│                                            (画像/目标用真实预算账单播种,DeepSeek 自动同步,默认 deepseek-v4-flash)
 ├── data/
 │   ├── FinanceDb.kt                         Room v3:BillEntity(timeBucket 分钟去重)+ DAO + Migration
 │   ├── AccessibilityEventRepository.kt      事件总线(records/events/指令前缀)+ 入账合法性守卫 + postConsumption
@@ -137,7 +140,9 @@ adb shell am broadcast -a com.example.finance.TEST_CONFIGURE -n com.example.fina
 
 ## 六、下一步建议(优先级;2026-09-07 更新)
 
-> ✅ 已完成:P0 编码护栏/提交纪律(git 钩子 + Gradle preBuild 双闸);P2 解析器纯函数化 + 49 例单测(时间/金额/店名/去重键,后续平台改版回归可先跑单测再上真机)。
+> ✅ 已完成:P0 编码护栏/提交纪律(git 钩子 + Gradle preBuild 双闸);P2 解析器纯函数化 + 49 例单测;
+>   蓝版主题 UI(屏1~3)+4-Tab;**sult_liban 识屏智能体整合**(录屏+OCR+技能决策+DeepSeek 估价,「咨询」Tab);
+>   记录页「每日花费」日历;**单测 16 套件 119 例全绿**;识屏 LLM 统一 DeepSeek(v4-flash)。
 
 - **P1**:CSV 按月份/来源过滤 + FileProvider 系统分享(数据已真实可用,收益高)。
 - **P1(AI)**:AI 月报 + 环比趋势图(近30 vs 前30),首页趋势卡;或智能消费异常预警(超支/深夜/高频小额)。
