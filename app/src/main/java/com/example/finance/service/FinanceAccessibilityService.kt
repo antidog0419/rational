@@ -2208,55 +2208,54 @@ class FinanceAccessibilityService : AccessibilityService() {
 
  // 本单金额 = 页面最下方的真¥（合应付行通常在底部）：先取下半屏 y 最大者，否则y 最大
             val h = resources.displayMetrics.heightPixels
-            val amounts = ArrayList<Pair<Double, Int>>() // (金额, centerY)
+            // 行级采集：只收屏幕可视区文本行（列表预渲染的屏外价格节点一律不要）
+            data class PriceLine(val text: String, val top: Int, val bottom: Int, val cy: Int)
+            val priceLines = ArrayList<PriceLine>()
+            val seenTexts = HashSet<String>()
             var scannedAmt = 0
             fun scanAmt(node: android.view.accessibility.AccessibilityNodeInfo) {
-                if (scannedAmt++ > 400) return
+                if (scannedAmt++ > 500) return
                 val t = node.text?.toString()?.trim() ?: ""
-                if (t.isNotEmpty()) {
-                    val m = BillAmountText.PRICE_TOKEN_REGEX.find(t)
-                    if (m != null) {
-                        val r = android.graphics.Rect()
-                        runCatching { node.getBoundsInScreen(r) }
-                        if (!r.isEmpty && r.top >= 0 && r.bottom <= h) { // 只收屏幕可视区内金额
-                            m.groupValues[1].toDoubleOrNull()?.let { amounts.add(it to r.centerY()) }
-                            return
-                        }
+                if (t.isNotEmpty() && t.length <= 80) {
+                    val r = android.graphics.Rect()
+                    runCatching { node.getBoundsInScreen(r) }
+                    if (!r.isEmpty && r.top >= 0 && r.bottom <= h && seenTexts.add(t)) {
+                        priceLines.add(PriceLine(t, r.top, r.bottom, r.centerY()))
                     }
                 }
                 for (i in 0 until node.childCount) node.getChild(i)?.let { scanAmt(it) }
             }
             try { scanAmt(root) } catch (t: Throwable) { /* 忽略 */ }
-            if (amounts.isEmpty()) {
-                // 兜底：实付常与按钮/文案同行（如"极速支付 ¥29.88"），不是独立 ¥ 节点；
-                // 排除券前/共减/立减/原价/运费等非应付金额行
-                val inline = Regex("""[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)""")
-                val noise = listOf("券前", "共减", "立减", "已减", "原价", "运费", "打包", "配送", "起送", "红包")
-                var scanned2 = 0
-                fun scanAmt2(node: android.view.accessibility.AccessibilityNodeInfo) {
-                    if (scanned2++ > 400) return
-                    val t = node.text?.toString()?.trim() ?: ""
-                    if (t.isNotEmpty() && noise.none { t.contains(it) }) {
-                        val m = inline.find(t)
-                        if (m != null) {
-                            val r = android.graphics.Rect()
-                            runCatching { node.getBoundsInScreen(r) }
-                            if (!r.isEmpty && r.top >= 0 && r.bottom <= h) {
-                                m.groupValues[1].toDoubleOrNull()?.let { amounts.add(it to r.centerY()) }
-                                return
-                            }
-                        }
-                    }
-                    for (i in 0 until node.childCount) node.getChild(i)?.let { scanAmt2(it) }
-                }
-                try { scanAmt2(root) } catch (t: Throwable) { /* 忽略 */ }
+            // 金额挑选：费用词行(共减/立减/券/运费…)排除；其拆分的独立"¥1.8"式邻行也排除；
+            // 含应付词(实付/合计/支付/提交…)行内金额优先，否则取最下方可用金额
+            val money = Regex("""[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)""")
+            val feeWords = listOf("共减", "立减", "已减", "满减", "券", "红包", "运费", "配送", "打包", "起送", "优惠", "代金")
+            val payWords = listOf("应付", "实付", "合计", "共需", "需付", "支付", "提交", "确认", "结算", "总价", "小计")
+            val feeLines = ArrayList<PriceLine>()
+            for (line in priceLines) {
+                if (feeWords.any { w -> line.text.contains(w) }) feeLines.add(line)
             }
-            val amount = (amounts.filter { it.second > h * 0.45f }.maxByOrNull { it.second }
-                ?: amounts.maxByOrNull { it.second })?.first ?: return@launch
+            val candidates = ArrayList<Pair<Double, PriceLine>>()
+            for (line in priceLines) {
+                val m = money.find(line.text) ?: continue
+                val amount = m.groupValues[1].toDoubleOrNull() ?: continue
+                val hasFee = feeWords.any { w -> line.text.contains(w) }
+                // 拆分行判定：与费用行重叠(同 y 带)或紧贴其上(≤80px)视为同一费用行的一部分
+                val nearFee = feeLines.any { f ->
+                    (f.top < line.bottom && f.bottom > line.top) ||
+                            (f.bottom <= line.top && line.top - f.bottom <= 80)
+                }
+                if (!hasFee && !nearFee) candidates.add(amount to line)
+            }
+            val sorted = candidates.sortedByDescending { it.second.cy }
+            val chosen = sorted.firstOrNull { (_, l) -> payWords.any { w -> l.text.contains(w) } }
+                ?: sorted.firstOrNull()
+            val amount = chosen?.first ?: return@launch
             Log.d(
                 TAG,
-                "🛒 金额候选(可见, 底→上): " + amounts.sortedByDescending { it.second }
-                    .take(6).joinToString { a -> "¥" + "%.2f".format(a.first) + "@y" + a.second }
+                "🛒 金额候选(可见, 底→上): " + sorted.take(8)
+                    .joinToString { a -> "¥" + "%.2f".format(a.first) + "@y" + a.second.cy } +
+                        " | 选定 ¥" + "%.2f".format(amount) + " | 行=" + chosen.second.text.take(24)
             )
             val merchant = pickMerchantName(root, markers, h) ?: "待下单商品"
 
