@@ -2226,11 +2226,12 @@ class FinanceAccessibilityService : AccessibilityService() {
                 for (i in 0 until node.childCount) node.getChild(i)?.let { scanAmt(it) }
             }
             try { scanAmt(root) } catch (t: Throwable) { /* 忽略 */ }
-            // 金额挑选：费用词行(共减/立减/券/运费…)排除；其拆分的独立"¥1.8"式邻行也排除；
-            // 含应付词(实付/合计/支付/提交…)行内金额优先，否则取最下方可用金额
+            // 金额挑选：费用词行(共减/立减/券/运费…)排除；其拆分的独立"¥1.8"式纯金额邻行也排除；
+            // 含应付词(实付/合计/支付/提交…)行内金额优先(绝不被费用邻行误杀)，否则取最下方可用金额
             val money = Regex("""[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)""")
-            val feeWords = listOf("共减", "立减", "已减", "满减", "券", "红包", "运费", "配送", "打包", "起送", "优惠", "代金")
+            val feeWords = listOf("共减", "立减", "已减", "满减", "券", "红包", "运费", "配送", "打包", "起送", "优惠", "代金", "立减")
             val payWords = listOf("应付", "实付", "合计", "共需", "需付", "支付", "提交", "确认", "结算", "总价", "小计")
+            val purePrice = Regex("""^[¥￥]\s*[0-9]+(?:\.[0-9]{1,2})?$""")
             val feeLines = ArrayList<PriceLine>()
             for (line in priceLines) {
                 if (feeWords.any { w -> line.text.contains(w) }) feeLines.add(line)
@@ -2240,17 +2241,25 @@ class FinanceAccessibilityService : AccessibilityService() {
                 val m = money.find(line.text) ?: continue
                 val amount = m.groupValues[1].toDoubleOrNull() ?: continue
                 val hasFee = feeWords.any { w -> line.text.contains(w) }
-                // 拆分行判定：与费用行重叠(同 y 带)或紧贴其上(≤80px)视为同一费用行的一部分
-                val nearFee = feeLines.any { f ->
+                val hasPayWord = payWords.any { w -> line.text.contains(w) }
+                val isPurePrice = purePrice.matches(line.text.trim())
+                // 拆分行排除：仅对"纯金额节点"生效（如独立的 ¥1.8），且仅当与费用行同行重叠
+                // 或紧贴其下方(≤40px)。含应付标签的行永远保留。
+                val nearFee = !hasPayWord && isPurePrice && feeLines.any { f ->
                     (f.top < line.bottom && f.bottom > line.top) ||
-                            (f.bottom <= line.top && line.top - f.bottom <= 80)
+                            (line.top >= f.bottom && line.top - f.bottom <= 40)
                 }
                 if (!hasFee && !nearFee) candidates.add(amount to line)
             }
             val sorted = candidates.sortedByDescending { it.second.cy }
             val chosen = sorted.firstOrNull { (_, l) -> payWords.any { w -> l.text.contains(w) } }
                 ?: sorted.firstOrNull()
-            val amount = chosen?.first ?: return@launch
+            val amount = chosen?.first
+            if (amount == null) {
+                logJudgeMiss("无可用应付金额", priceLines.map { it.text }, emptyList(),
+                    strongCta, weakCta, sumInfo, feedish)
+                return@launch
+            }
             Log.d(
                 TAG,
                 "🛒 金额候选(可见, 底→上): " + sorted.take(8)
