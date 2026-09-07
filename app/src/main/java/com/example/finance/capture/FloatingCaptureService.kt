@@ -23,6 +23,8 @@ import com.example.finance.R
 import com.example.finance.agent.AgentGraph
 import com.example.finance.agent.AnalysisBus
 import com.example.finance.agent.LowConfidenceException
+import com.example.finance.data.BillSources
+import com.example.finance.data.BillWriter
 import com.example.finance.scene.*
 import com.example.finance.ui.MainActivity
 import android.os.Build
@@ -139,6 +141,7 @@ class FloatingCaptureService : Service() {
         analysisJob = serviceScope.launch {
             var bitmap: Bitmap? = null
             try {
+                runCatching { AgentGraph.syncAll(this@FloatingCaptureService) } // 预算口径/LLM 保持最新
                 AnalysisBus.update(AnalysisState.Capturing)
                 removeOverlayViews()
                 delay(40) // Two display frames at 60Hz so the overlay is absent from capture.
@@ -289,9 +292,9 @@ class FloatingCaptureService : Service() {
         container.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
-            addView(actionButton("还是买") { feedback(decision, UserAction.PURCHASE) })
-            addView(actionButton("等等") { feedback(decision, UserAction.DELAY) })
-            addView(actionButton("放弃") { feedback(decision, UserAction.CANCEL) })
+            addView(actionButton("还是买") { feedback(scene, decision, UserAction.PURCHASE) })
+            addView(actionButton("等等") { feedback(scene, decision, UserAction.DELAY) })
+            addView(actionButton("放弃") { feedback(scene, decision, UserAction.CANCEL) })
         })
         val params = overlayParams(dp(340), WindowManager.LayoutParams.WRAP_CONTENT, Gravity.CENTER)
         runCatching { windowManager.addView(container, params); resultView = container }
@@ -301,11 +304,27 @@ class FloatingCaptureService : Service() {
             }
     }
 
-    private fun feedback(decision: DecisionResult, action: UserAction) {
+    private fun feedback(scene: SceneContext, decision: DecisionResult, action: UserAction) {
         serviceScope.launch(Dispatchers.IO) {
             val recorded = AgentGraph.repository.recordFeedback(decision.decisionId, action, decision.delayHours)
+            var message = if (recorded) "已记录" else "该决策已反馈"
+            if (action == UserAction.PURCHASE) {
+                // #4 识屏购买确认 → 同时记入本地账单（第二记账通道；来源=识屏）
+                val r = BillWriter.add(
+                    this@FloatingCaptureService,
+                    scene.product.name,
+                    scene.price.currentCents / 100.0,
+                    BillSources.SCREEN,
+                    "识屏·${decision.display.title}",
+                )
+                message = when (r) {
+                    null -> "$message，记一笔失败"
+                    -1L -> "$message；该账单已存在，未重复记入"
+                    else -> "$message，并已记入本地账单"
+                }
+            }
             withContext(Dispatchers.Main) {
-                Toast.makeText(this@FloatingCaptureService, if (recorded) "已记录" else "该决策已反馈", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@FloatingCaptureService, message, Toast.LENGTH_SHORT).show()
                 showBubble()
             }
         }

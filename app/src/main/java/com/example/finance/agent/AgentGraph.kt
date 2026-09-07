@@ -1,7 +1,8 @@
 // agent/AgentGraph.kt
 // 识屏智能体 DI（移植自 sult_liban/LibanApplication.AppGraph，MIT）：
 // 独立 Room 库(agent.db)+ 配置(DataStore)+ MLKit OCR + OkHttp + AgentOrchestrator。
-// 首次启动用理伴真实数据（BudgetStore 预算 / FinanceDb 当月已花）播种默认画像与储蓄目标。
+// finance.db 是全 App 账单唯一权威：画像/目标首次用真实数据创建，此后每次 syncAll
+// 都把"本月已花"刷新为 finance.db 当月实际合计，保证识屏决策预算口径永远最新。
 
 package com.example.finance.agent
 
@@ -12,10 +13,8 @@ import com.example.finance.data.AppDatabase
 import com.example.finance.data.AppRepository
 import com.example.finance.data.BudgetStore
 import com.example.finance.data.FinanceDb
-import com.example.finance.data.SavingGoalEntity
-import com.example.finance.data.UserProfileEntity
-import com.example.finance.data.monthRange
 import com.example.finance.data.UserSettings
+import com.example.finance.data.monthRange
 import com.example.finance.ocr.MlKitChineseOcrProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -70,24 +69,35 @@ object AgentGraph {
     }
 
     /**
-     * 用理伴真实数据播种默认画像（仅首次）：
-     * 月预算=BudgetStore 总额，已花=FinanceDb 本月合计；默认储蓄目标=月预算×6（6 个月后）。
+     * 一键同步（识屏分析/记一笔前调用，幂等且廉价）：
+     *  ① 画像不存在时用 BudgetStore + FinanceDb 真实数据创建（月预算、默认储蓄目标）；
+     *  ② 每次都把画像"本月已花"刷新为 finance.db 当月实际合计；
+     *  ③ 同步 DeepSeek 配置（场景提取/估价，默认 deepseek-v4-flash）。
      */
-    suspend fun seedFromFinance(context: Context) = withContext(Dispatchers.IO) {
+    suspend fun syncAll(context: Context) = withContext(Dispatchers.IO) {
         init(context)
-        if (dao.getProfile() != null) return@withContext
+        syncProfileSpent(context)
+        syncLlmFromFinance(context)
+    }
+
+    private suspend fun syncProfileSpent(context: Context) = withContext(Dispatchers.IO) {
         val ctx = context.applicationContext
         val monthlyCents = (BudgetStore.monthlyBudget() * 100).toLong().coerceAtLeast(0)
         val (from, to) = monthRange()
-        val spentCents = runCatching { FinanceDb.get(ctx).billDao().sumBetweenOnce(from, to) }
-            .getOrDefault(0.0)
-        repository.saveProfile(monthlyCents, (spentCents * 100).toLong().coerceAtLeast(0))
-        repository.saveGoal(
-            name = "我的小目标",
-            targetCents = (monthlyCents * 6).coerceAtLeast(1),
-            currentCents = 0,
-            deadlineEpochDay = LocalDate.now().plusMonths(6).toEpochDay(),
-        )
+        val spentCents = (runCatching { FinanceDb.get(ctx).billDao().sumBetweenOnce(from, to) }
+            .getOrDefault(0.0) * 100).toLong().coerceAtLeast(0)
+        val existing = dao.getProfile()
+        if (existing == null) {
+            repository.saveProfile(monthlyCents, spentCents)
+            repository.saveGoal(
+                name = "我的小目标",
+                targetCents = (monthlyCents * 6).coerceAtLeast(1),
+                currentCents = 0,
+                deadlineEpochDay = LocalDate.now().plusMonths(6).toEpochDay(),
+            )
+        } else {
+            repository.saveProfile(existing.monthlyBudgetCents, spentCents)
+        }
     }
 
     /**

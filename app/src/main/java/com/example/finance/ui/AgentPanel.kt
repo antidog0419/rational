@@ -73,6 +73,9 @@ fun AgentPanel(modifier: Modifier = Modifier) {
     var manualPriceYuan by remember { mutableStateOf("2999") }
     var manualBusy by remember { mutableStateOf(false) }
     var manualResult by remember { mutableStateOf<String?>(null) }
+    var lastManual by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    var manualRecordState by remember { mutableStateOf<String?>(null) }
+    var recordedIds by remember { mutableStateOf(setOf<String>()) }
 
     // 权限 launcher
     val projectionLauncher = rememberLauncherForActivityResult(
@@ -100,7 +103,7 @@ fun AgentPanel(modifier: Modifier = Modifier) {
     ) { _ -> requestProjection() }
 
     fun launchCaptureFlow() {
-        scope.launch(Dispatchers.IO) { AgentGraph.seedFromFinance(context) }
+        scope.launch(Dispatchers.IO) { AgentGraph.syncAll(context) }
         when {
             !Settings.canDrawOverlays(context) -> {
                 context.startActivity(
@@ -153,8 +156,9 @@ fun AgentPanel(modifier: Modifier = Modifier) {
         if (manualBusy) return
         manualBusy = true
         manualResult = null
+        manualRecordState = null
         scope.launch(Dispatchers.IO) {
-            runCatching { AgentGraph.syncLlmFromFinance(context) } // 每次分析前同步 DeepSeek
+            runCatching { AgentGraph.syncAll(context) } // 预算口径 + DeepSeek 保持最新
             val cents = parseYuanToCents(manualPriceYuan.trim())
             if (cents == null) {
                 manualResult = "价格格式无效"
@@ -193,7 +197,38 @@ fun AgentPanel(modifier: Modifier = Modifier) {
             }.onFailure {
                 manualResult = "分析失败：${it.message}"
             }
+            if (!manualResult.orEmpty().startsWith("分析失败")) {
+                lastManual = name to cents
+            }
             manualBusy = false
+        }
+    }
+
+    /** 把"手动分析"的该笔确认记入本地账单（来源=识屏，与手动补记同库同权） */
+    fun recordManualPurchase() {
+        val m = lastManual ?: return
+        scope.launch(Dispatchers.IO) {
+            val r = com.example.finance.data.BillWriter.add(
+                context, m.first, m.second / 100.0,
+                com.example.finance.data.BillSources.SCREEN, "识屏决策·手动分析确认",
+            )
+            manualRecordState = when (r) {
+                null -> "无法记入：名称或金额无效"
+                -1L -> "该笔已存在（识屏·同商家同金额·同一分钟），未重复记入"
+                else -> "✓ 已记入本地账单（来源：识屏）"
+            }
+        }
+    }
+
+    /** 最近决策列表里主动"记一笔" */
+    fun recordDecision(decisionId: String, name: String, cents: Long) {
+        if (decisionId in recordedIds) return
+        scope.launch(Dispatchers.IO) {
+            val r = com.example.finance.data.BillWriter.add(
+                context, name, cents / 100.0,
+                com.example.finance.data.BillSources.SCREEN, "识屏决策购买确认",
+            )
+            if (r != null && r != -1L) recordedIds = recordedIds + decisionId
         }
     }
 
@@ -270,6 +305,19 @@ fun AgentPanel(modifier: Modifier = Modifier) {
                         color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
+            lastManual?.let {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(onClick = ::recordManualPurchase, enabled = manualRecordState == null,
+                        modifier = Modifier.weight(1f)) {
+                        Text(if (manualRecordState == null) "＋ 记一笔到本地账单" else "已处理")
+                    }
+                }
+                manualRecordState?.let { s ->
+                    Text(s, style = MaterialTheme.typography.labelSmall,
+                        color = if (s.startsWith("✓")) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error)
+                }
+            }
 
             // 最近决策
             if (decisions.isNotEmpty()) {
@@ -287,6 +335,12 @@ fun AgentPanel(modifier: Modifier = Modifier) {
                             }
                             Text("¥${d.priceCents / 100.0} · ${fmtDecisionTime(d.createdAt)} · ${d.recommendation}",
                                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(
+                                    enabled = d.decisionId !in recordedIds,
+                                    onClick = { recordDecision(d.decisionId, d.productName, d.priceCents) }
+                                ) { Text(if (d.decisionId in recordedIds) "✓ 已记账" else "＋ 记一笔") }
+                            }
                         }
                     }
                 }

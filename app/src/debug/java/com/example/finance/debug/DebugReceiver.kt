@@ -133,7 +133,7 @@ class DebugReceiver : BroadcastReceiver() {
             ACTION_AGENT_STATUS -> {
                 CoroutineScope(Dispatchers.IO).launch {
                     runCatching {
-                        com.example.finance.agent.AgentGraph.seedFromFinance(context)
+                        com.example.finance.agent.AgentGraph.syncAll(context)
                         val repo = com.example.finance.agent.AgentGraph.repository
                         val profile = repo.getProfile()
                         val goal = repo.getGoal()
@@ -152,8 +152,7 @@ class DebugReceiver : BroadcastReceiver() {
             ACTION_AGENT_TEST -> {
                 CoroutineScope(Dispatchers.IO).launch {
                     runCatching {
-                        com.example.finance.agent.AgentGraph.syncLlmFromFinance(context) // 每次测试前同步 DeepSeek
-                        com.example.finance.agent.AgentGraph.seedFromFinance(context)
+                        com.example.finance.agent.AgentGraph.syncAll(context) // 同步预算口径+DeepSeek 后再决策
                         val scene = com.example.finance.scene.SceneContext(
                             sceneType = "manual_test",
                             product = com.example.finance.scene.Product(
@@ -180,6 +179,39 @@ class DebugReceiver : BroadcastReceiver() {
                     }
                 }
                 Log.d(TAG, "TEST_AGENT_TEST 已触发（离线技能决策）")
+            }
+
+            ACTION_AGENT_RECORD -> {
+                if (intent.getBooleanExtra("cleanup", false)) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        runCatching {
+                            com.example.finance.data.FinanceDb.get(context)
+                                .billDao().deleteBySource(com.example.finance.data.BillSources.SCREEN)
+                            android.util.Log.d("FinanceAgent", "已清空「识屏」来源测试账单")
+                        }.onFailure { android.util.Log.e("FinanceAgent", "清理失败: ${it.message}") }
+                    }
+                    Log.d(TAG, "TEST_AGENT_RECORD cleanup 已触发")
+                } else {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val ctx = context
+                        runCatching {
+                            com.example.finance.agent.AgentGraph.syncAll(ctx)
+                            // 记两笔相同的验证：第二次应因"同来源商家金额+同分钟"去重返回 -1
+                            val first = com.example.finance.data.BillWriter.add(
+                                ctx, "识屏测试商品A", 66.0,
+                                com.example.finance.data.BillSources.SCREEN, "验证"
+                            )
+                            val second = com.example.finance.data.BillWriter.add(
+                                ctx, "识屏测试商品A", 66.0,
+                                com.example.finance.data.BillSources.SCREEN, "验证"
+                            )
+                            android.util.Log.d("FinanceAgent", "记一笔 first=$first second=$second (第二笔应为 -1=去重)")
+                        }.onFailure {
+                            android.util.Log.e("FinanceAgent", "记一笔失败: ${it.message}")
+                        }
+                    }
+                    Log.d(TAG, "TEST_AGENT_RECORD 已触发")
+                }
             }
 
             ACTION_CONFIGURE -> {
@@ -219,5 +251,6 @@ class DebugReceiver : BroadcastReceiver() {
         const val ACTION_CLEAR_BILLS = "com.example.finance.TEST_CLEAR_BILLS"
         const val ACTION_AGENT_STATUS = "com.example.finance.TEST_AGENT_STATUS"
         const val ACTION_AGENT_TEST = "com.example.finance.TEST_AGENT_TEST"
+        const val ACTION_AGENT_RECORD = "com.example.finance.TEST_AGENT_RECORD"
     }
 }
