@@ -103,7 +103,7 @@ object AgentGraph {
             configRepository.saveLlm(
                 base.trimEnd('/') + "/v1/chat/completions",
                 key,
-                s.deepseekModel.ifBlank { "deepseek-chat" },
+                s.deepseekModel.ifBlank { "deepseek-v4-flash" },
             )
         }
     }

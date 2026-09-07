@@ -46,11 +46,11 @@ data class PublicApiConfiguration(
     val llmOcrEnabled: Boolean = true,
 )
 
-/** 预置：LLM 默认理伴 DeepSeek；智谱搜索默认引擎。Key 一律留空（在「我的 → 识屏助手」填）。 */
+/** 预置：LLM 默认理伴 DeepSeek(v4-flash)；搜索默认智谱引擎(未配 Key 不启用)。Key 一律留空（在「我的 → 识屏助手」填）。 */
 fun bundledApiConfiguration() = ApiConfiguration(
     llmEndpoint = "https://api.deepseek.com/v1/chat/completions",
     llmApiKey = "",
-    llmModel = "deepseek-chat",
+    llmModel = "deepseek-v4-flash",
     searchBaseUrl = "https://open.bigmodel.cn/api",
     searchApiKey = "",
     searchEngine = "search_pro_quark",
