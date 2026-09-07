@@ -50,6 +50,13 @@ class UserSettings(context: Context) {
             prefs.edit().putBoolean(KEY_JUDGE_ENABLED, value).apply()
         }
 
+    /** AI 干预强度（1~10，默认 8）：越强越主动提醒；设计稿"AI 干预强度调节" */
+    var aiInterventionStrength: Int
+        get() = prefs.getInt(KEY_INTERVENTION_STRENGTH, 8).coerceIn(1, 10)
+        set(value) {
+            prefs.edit().putInt(KEY_INTERVENTION_STRENGTH, value.coerceIn(1, 10)).apply()
+        }
+
     // ============ DeepSeek 云端配置（运行时覆盖，留空则用 BuildConfig 默认） ============
 
     /** DeepSeek API Key（如 sk-xxx）——Keystore AES-GCM 加密后落盘（兼容旧明文自动迁移） */
@@ -110,6 +117,7 @@ class UserSettings(context: Context) {
         const val KEY_A11Y_CONNECTED = "a11y_service_connected"
         const val KEY_FETCH_LIMIT = "fetch_bill_limit"
         const val KEY_JUDGE_ENABLED = "judge_before_order_enabled"
+        const val KEY_INTERVENTION_STRENGTH = "ai_intervention_strength"
         const val KEY_DS_API_KEY = "deepseek_api_key"
         const val KEY_DS_MODEL = "deepseek_model"
         const val KEY_DS_BASE_URL = "deepseek_base_url"

@@ -184,11 +184,17 @@ fun HomeScreen() {
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     icon = { Text("📋") },
-                    label = { Text("账单") }
+                    label = { Text("记录") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
+                    icon = { Text("💬") },
+                    label = { Text("咨询") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     icon = { Text("👤") },
                     label = { Text("我的") }
                 )
@@ -196,7 +202,29 @@ fun HomeScreen() {
         },
         content = { padding ->
             when (selectedTab) {
-                0 -> HomeTabColumn(
+                0 -> RationalHomeTab(
+                    padding,
+                    onDiagnose = ::generateWeekly,
+                    onReport = ::generateWeekly
+                )
+
+                1 -> BillsTabColumn(padding, logs, a11yEnabled,
+                    onFetchAlipay = {
+                        settings.pendingBillFetch = false
+                        AccessibilityEventRepository.postAlipayBillFetchRequest()
+                        logs.add(0, "📋 已请求：自动打开支付宝 → 进入账单 → 翻页抓取")
+                    },
+                    onFetchMeituan = {
+                        AccessibilityEventRepository.postMeituanBillFetchRequest()
+                        logs.add(0, "📋 已请求：自动打开美团 → 尝试进入账单/明细页并翻页抓取")
+                    },
+                    onFetchTaobao = {
+                        AccessibilityEventRepository.postTaobaoBillFetchRequest()
+                        logs.add(0, "📋 已请求：自动打开淘宝闪购 → 尝试进入订单/账单页并翻页抓取")
+                    }
+                )
+
+                2 -> ConsultTab(
                     padding, aiAdvice, currentNeeds, isRecommendLoading, isWeeklyLoading,
                     a11yEnabled, autoExecute, topPicks, merchantCount,
                     onNeedsChange = { currentNeeds = it },
@@ -228,22 +256,6 @@ fun HomeScreen() {
                         }
                     },
                     onPick = ::executePicked
-                )
-
-                1 -> BillsTabColumn(padding, logs, a11yEnabled,
-                    onFetchAlipay = {
-                        settings.pendingBillFetch = false
-                        AccessibilityEventRepository.postAlipayBillFetchRequest()
-                        logs.add(0, "📋 已请求：自动打开支付宝 → 进入账单 → 翻页抓取")
-                    },
-                    onFetchMeituan = {
-                        AccessibilityEventRepository.postMeituanBillFetchRequest()
-                        logs.add(0, "📋 已请求：自动打开美团 → 尝试进入账单/明细页并翻页抓取")
-                    },
-                    onFetchTaobao = {
-                        AccessibilityEventRepository.postTaobaoBillFetchRequest()
-                        logs.add(0, "📋 已请求：自动打开淘宝闪购 → 尝试进入订单/账单页并翻页抓取")
-                    }
                 )
 
                 else -> MineTabColumn(padding, settings, a11yEnabled, autoExecute, judgeEnabled, apiKeyInput, modelInput, dsStatus,
@@ -593,6 +605,119 @@ private fun HomeTabColumn(
             Text("在「账单」页抓取美团/淘宝/支付宝后自动积累",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+// ============ 咨询 Tab（AI 建议 / 每周小结 / Top3 推荐） ============
+@Composable
+private fun ConsultTab(
+    padding: androidx.compose.foundation.layout.PaddingValues,
+    aiAdvice: SnapshotStateList<AIAdvice>,
+    currentNeeds: String,
+    isRecommendLoading: Boolean,
+    isWeeklyLoading: Boolean,
+    a11yEnabled: Boolean,
+    autoExecute: Boolean,
+    topPicks: List<String>,
+    merchantCount: Int,
+    onNeedsChange: (String) -> Unit,
+    onGenerateWeekly: () -> Unit,
+    onRecommendTop3: () -> Unit,
+    onPick: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(padding)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SectionTitle("AI 咨询中心")
+
+        // AI 建议
+        aiAdvice.firstOrNull()?.let { advice ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("💡", style = MaterialTheme.typography.titleLarge)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(advice.advice,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("推理来源：${advice.source}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } ?: Card(modifier = Modifier.fillMaxWidth()) {
+            Text("暂无建议：消费一笔或生成一次小结后，这里会给出 AI 解读。",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        // 每周 AI 小结
+        SectionTitle("每周 AI 小结 · 近 7 天")
+        Button(onClick = onGenerateWeekly, enabled = !isWeeklyLoading, modifier = Modifier.fillMaxWidth()) {
+            Text(if (isWeeklyLoading) "⏳ 生成中…（约几秒）" else "📅 生成本周小结")
+        }
+        Text("内容：总支出/日均、分类与渠道分布、高频去向、与上个 7 天环比、预算执行与下周建议。",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        // AI 外卖推荐
+        SectionTitle("AI 外卖推荐 · 最想吃 Top3")
+        TextField(
+            enabled = a11yEnabled,
+            value = currentNeeds,
+            onValueChange = onNeedsChange,
+            label = { Text("输入当前需求（例如：想吃辣的、预算30元内）") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(
+            onClick = onRecommendTop3,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = a11yEnabled && !isRecommendLoading && currentNeeds.isNotEmpty()
+        ) { Text(if (isRecommendLoading) "思考中..." else "从本地账单对比推荐 Top3") }
+
+        if (topPicks.isNotEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("💡 结合你的历史账单，现在最想吃：",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    topPicks.take(3).forEachIndexed { idx, name ->
+                        OutlinedButton(onClick = { onPick(name) }, modifier = Modifier.fillMaxWidth()) {
+                            Text("${idx + 1}. $name  → 去美团搜索")
+                        }
+                    }
+                    if (autoExecute) {
+                        Text("已开启自动执行：将直接打开美团搜索第 1 名",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary)
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("🏪 本地商家库：$merchantCount 家",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("抓取美团/淘宝/支付宝后自动积累",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

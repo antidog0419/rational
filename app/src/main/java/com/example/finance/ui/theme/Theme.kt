@@ -63,6 +63,56 @@ private val LightColorScheme = lightColorScheme(
     onError = Color.White
 )
 
+// 蓝色主题浅色方案（实验版：替换墨绿为"冷静理性"的蓝，见 Color.kt RationalBlue*）
+private val BlueLightColorScheme = lightColorScheme(
+    primary = RationalBlue40,
+    onPrimary = Color.White,
+    primaryContainer = RationalBlueContainer,
+    onPrimaryContainer = OnRationalBlueContainer,
+    secondary = RationalBlueSecondary40,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFC4E8EC),
+    onSecondaryContainer = Color(0xFF00262B),
+    tertiary = RationalBlueTertiary40,
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFFDCC2),
+    onTertiaryContainer = Color(0xFF2B1600),
+    background = RationalBlueBg,
+    onBackground = OnFinance,
+    surface = RationalBlueSurface,
+    onSurface = OnFinance,
+    surfaceVariant = Color(0xFFDAE3EA),
+    onSurfaceVariant = Color(0xFF41474D),
+    outline = RationalBlueOutline,
+    error = FinanceError,
+    onError = Color.White
+)
+
+// 蓝色主题深色方案
+private val BlueDarkColorScheme = darkColorScheme(
+    primary = RationalBlue80,
+    onPrimary = Color(0xFF00344F),
+    primaryContainer = RationalBlueContainerDark,
+    onPrimaryContainer = OnRationalBlueContainerDark,
+    secondary = RationalBlueSecondary80,
+    onSecondary = Color(0xFF00363A),
+    secondaryContainer = Color(0xFF004E52),
+    onSecondaryContainer = Color(0xFFC4E8EC),
+    tertiary = RationalBlueTertiary80,
+    onTertiary = Color(0xFF3D2500),
+    tertiaryContainer = Color(0xFF4A3100),
+    onTertiaryContainer = Color(0xFFFFDCC2),
+    background = RationalBlueBgDark,
+    onBackground = OnFinanceDark,
+    surface = RationalBlueSurfaceDark,
+    onSurface = OnFinanceDark,
+    surfaceVariant = Color(0xFF394148),
+    onSurfaceVariant = Color(0xFFC1C7CE),
+    outline = RationalBlueOutlineDark,
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005)
+)
+
 @Composable
 fun FinanceTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -80,8 +130,8 @@ fun FinanceTheme(
             }
         }
 
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        darkTheme -> BlueDarkColorScheme
+        else -> BlueLightColorScheme
     }
 
     // 让系统状态栏/导航栏贴合主题

@@ -32,3 +32,23 @@ val FinanceBgDark = Color(0xFF101413)
 val FinanceSurfaceDark = Color(0xFF161A19)
 val OnFinanceDark = Color(0xFFE2E3E0)
 val FinanceOutlineDark = Color(0xFF89938E)
+
+// ============ 蓝色主题（设计稿"冷静理性"观感；2026-09-07 实验版，替换墨绿主色） ============
+val RationalBlue40 = Color(0xFF0B6B9E)      // 主色：深蓝
+val RationalBlueContainer = Color(0xFFC7E8FF)
+val OnRationalBlueContainer = Color(0xFF001D2C)
+val RationalBlueSecondary40 = Color(0xFF2A7F8F)  // 次色：青蓝
+val RationalBlueTertiary40 = Color(0xFFB26A00)   // 强调：琥珀橙
+val RationalBlueBg = Color(0xFFF2F9FD)           // 页面背景：冷蓝白
+val RationalBlueSurface = Color(0xFFFBFDFF)
+val RationalBlueOutline = Color(0xFF75777C)
+
+// 深色
+val RationalBlue80 = Color(0xFF8CCFFF)
+val RationalBlueContainerDark = Color(0xFF005080)
+val OnRationalBlueContainerDark = Color(0xFFC7E8FF)
+val RationalBlueSecondary80 = Color(0xFF8FDDEB)
+val RationalBlueTertiary80 = Color(0xFFFFCE9C)
+val RationalBlueBgDark = Color(0xFF0F1416)
+val RationalBlueSurfaceDark = Color(0xFF16191D)
+val RationalBlueOutlineDark = Color(0xFF8C9198)

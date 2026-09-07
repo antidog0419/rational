@@ -56,10 +56,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // 冷启动若已授权，或从设置页授权返回后，都会走到这里 → 自动展示悬浮窗
-        if (isPermissionGranted && !isFinishing) {
-            showTestFloatingWindow()
-        }
+        // 说明：不再在每次前台自动弹出"测试悬浮窗"（原为调试自测，会遮挡真实 UI）。
+        // 真实悬浮窗（消费提醒/下单前判断/抓取控制）由 AccessibilityService 在对应事件时调用。
     }
 
     private fun checkOverlayPermission() {
