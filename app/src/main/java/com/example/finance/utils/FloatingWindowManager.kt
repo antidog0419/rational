@@ -29,6 +29,7 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.example.finance.data.UserSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,6 +45,104 @@ class FloatingWindowManager(private val context: Context) {
     // 抓取"控制悬浮窗"（常驻，带可点击的停止按钮；与上面的自动隐藏状态窗相互独立）
     private var fetchControlView: View? = null
     private var fetchSubtitleView: TextView? = null
+
+    // ============== 顶部"灵动胶囊"（消费提醒/下单判断/AI 点评/抓取完成） ==============
+    private var islandView: View? = null
+    private var islandLp: WindowManager.LayoutParams? = null
+    private var islandAnim: android.animation.ValueAnimator? = null
+
+    /** 顶部居中药丸：从上滑入 → 停留(设置秒数) → 淡出收起；新消息会替换旧胶囊 */
+    private fun showIsland(message: String) {
+        hideIsland()
+        hideFetchControl() // 与可交互控制窗互斥，避免叠加
+        val d = context.resources.displayMetrics.density
+        val seconds = UserSettings(context).islandSeconds.toLong()
+        val text = TextView(context).apply {
+            this.text = message
+            setTextColor(Color.WHITE)
+            textSize = 13.5f
+            maxLines = 2
+            includeFontPadding = false
+        }
+        text.maxWidth = context.resources.displayMetrics.widthPixels - (44 * d).toInt()
+        val pill = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding((18 * d).toInt(), (12 * d).toInt(), (18 * d).toInt(), (12 * d).toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = (30 * d) // 药丸形
+                setColor(0xF218181C.toInt())
+                setStroke((1 * d).toInt(), Color.argb(80, 255, 255, 255))
+            }
+            elevation = 16 * d
+            addView(text)
+        }
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            y = (34 * d).toInt() // 状态栏下方，贴顶居中
+        }
+        val targetY = lp.y
+        runCatching {
+            windowManager.addView(pill, lp)
+            islandView = pill
+            islandLp = lp
+            pill.alpha = 0f
+            pill.animate().alpha(1f).setDuration(180).start()
+            islandAnim = android.animation.ValueAnimator.ofInt(-(80 * d).toInt(), targetY).apply {
+                duration = 300
+                interpolator = android.view.animation.DecelerateInterpolator()
+                addUpdateListener { a ->
+                    lp.y = a.animatedValue as Int
+                    runCatching { windowManager.updateViewLayout(pill, lp) }
+                }
+                start()
+            }
+            autoHideJob?.cancel()
+            autoHideJob = CoroutineScope(Dispatchers.Main).launch {
+                delay(seconds * 1000)
+                collapseIsland()
+            }
+        }.onFailure {
+            Log.e(TAG, "灵动胶囊显示失败: ${it.message}", it)
+            islandView = null
+            islandLp = null
+        }
+    }
+
+    /** 胶囊淡出并移除（不打断滑入动画则直接收起） */
+    private fun collapseIsland() {
+        islandAnim?.cancel()
+        val view = islandView ?: return
+        view.animate().alpha(0f).setDuration(200).withEndAction {
+            runCatching { windowManager.removeViewImmediate(view) }
+            if (islandView === view) islandView = null
+            islandLp = null
+        }.start()
+    }
+
+    /** 立即移除胶囊（新消息/切换样式/生命周期清理） */
+    private fun hideIsland() {
+        islandAnim?.cancel()
+        islandAnim = null
+        autoHideJob?.cancel()
+        islandView?.let { view ->
+            runCatching { windowManager.removeViewImmediate(view) }
+            islandView = null
+        }
+        islandLp = null
+    }
 
     companion object {
         private const val TAG = "FloatingWindow"
@@ -84,21 +183,25 @@ class FloatingWindowManager(private val context: Context) {
     fun showStatus(status: String) {
         if (!hasStandardPermission()) return
         try {
-            createAndShowWindow("📋 自动抓取中", status)
+            if (islandEnabled()) showIsland(status)
+            else createAndShowWindow("理伴", status)
         } catch (e: Exception) {
             Log.e(TAG, "状态悬浮窗失败: ${e.message}", e)
         }
     }
 
-    /** 下单前 AI 判断气泡（独立标题，5 秒后自动隐藏） */
+    /** 下单前 AI 判断（灵动胶囊 / 传统框，按设置路由） */
     fun showVerdict(msg: String) {
         if (!hasStandardPermission()) return
         try {
-            createAndShowWindow("🛒 下单前判断", msg)
+            if (islandEnabled()) showIsland(msg)
+            else createAndShowWindow("🛒 下单前判断", msg)
         } catch (e: Exception) {
             Log.e(TAG, "判断悬浮窗失败: ${e.message}", e)
         }
     }
+
+    private fun islandEnabled(): Boolean = UserSettings(context).islandEnabled
 
     // ============== 抓取控制悬浮窗（常驻 + 可点击停止） ==============
 
@@ -293,6 +396,7 @@ class FloatingWindowManager(private val context: Context) {
     }
 
     fun hideWindow() {
+        hideIsland() // 灵动胶囊也一并清理
         floatingView?.let { view ->
             try {
                 windowManager.removeViewImmediate(view)

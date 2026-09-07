@@ -82,6 +82,10 @@ class FinanceAccessibilityService : AccessibilityService() {
     private var lastJudgeKey = ""
     private var judgeMissLogAt = 0L // "接近但未调试日志采样点（20s 一条，防刷屏）
 
+    // 灵动胶囊联动：最近一次"实时消费提醒"时刻；其后的 AI 点评自动上胶囊
+    private var lastRealtimeRemindAt = 0L
+    private var adviceIslandJob: Job? = null
+
     private var eventListenerJob: Job? = null
 
  // 淘宝账单时间推断（跨屏共享状态）：用支付本地已入账单(金额+店名)匹配真实支付时间
@@ -109,6 +113,7 @@ class FinanceAccessibilityService : AccessibilityService() {
         startEventListener()
         postUILog("♿ 无障碍服务已连接，可开始抓取账单")
         startWindowHealthProbe() // #7 无障碍健康自检（诊断用）
+        startAdviceIslandListener() // AI 点评 → 灵动胶囊
  // 处理"点了抓取但服务当时未连接"的待办请求（避免点了没反应）
  // 注意：只有在【本应用处于前台】时才立即执—若此刻在系统设置页，
  // 后台拉起支付宝会被小鸿蒙拦截，此时保留标记，等用户回到本应用onResume 触发
@@ -129,8 +134,23 @@ class FinanceAccessibilityService : AccessibilityService() {
         return runCatching { rootInActiveWindow?.packageName == packageName }.getOrDefault(false)
     }
 
-    private fun startWindowHealthProbe() {
-        val h = android.os.Handler(android.os.Looper.getMainLooper())
+    /** 实时消费提醒后 15s 内到达的 AI 点评 → 顶部灵动胶囊（其余时刻不打扰） */
+    private fun startAdviceIslandListener() {
+        adviceIslandJob = CoroutineScope(Dispatchers.IO).launch {
+            AIService.adviceFlow.collect { advice ->
+                val now = System.currentTimeMillis()
+                if (now - lastRealtimeRemindAt <= 15_000L) {
+                    withContext(Dispatchers.Main) {
+                        runCatching {
+                            floatingWindowManager.showStatus("🤖 AI 点评：${advice.advice}")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun startWindowHealthProbe() {        val h = android.os.Handler(android.os.Looper.getMainLooper())
         val runnable = object : Runnable {
             override fun run() {
                 try {
@@ -2543,6 +2563,7 @@ class FinanceAccessibilityService : AccessibilityService() {
         Log.d(TAG, "✅ 实时[$source]: $m - ¥$amount")
  // 预算联动（IO）：算当分类预算剩余 悬浮窗提+ AI 点评带上预算上下
         CoroutineScope(Dispatchers.IO).launch {
+            lastRealtimeRemindAt = System.currentTimeMillis() // 供 AI 点评上胶囊
             try {
                 val category = BillCategories.categorize(m, source)
                 val snap = BudgetPlanner.snapshotMonth(this@FinanceAccessibilityService)
@@ -2698,6 +2719,8 @@ class FinanceAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        adviceIslandJob?.cancel()
+        adviceIslandJob = null
         super.onDestroy()
         Log.d(TAG, "无障碍服务销毁")
         UserSettings(this).a11yServiceConnected = false

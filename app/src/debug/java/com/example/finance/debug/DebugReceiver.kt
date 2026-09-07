@@ -214,6 +214,16 @@ class DebugReceiver : BroadcastReceiver() {
                 }
             }
 
+            ACTION_ISLAND_TEST -> {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    runCatching {
+                        com.example.finance.utils.FloatingWindowManager(context.applicationContext)
+                            .showStatus("🧪 灵动胶囊测试 · 消费/AI 点评/下单判断都会这样弹")
+                    }
+                }
+                Log.d(TAG, "TEST_ISLAND 已触发（顶部胶囊滑入）")
+            }
+
             ACTION_CONFIGURE -> {
                 val key = intent.getStringExtra("apiKey").orEmpty()
                 val model = intent.getStringExtra("model").orEmpty()
@@ -252,5 +262,6 @@ class DebugReceiver : BroadcastReceiver() {
         const val ACTION_AGENT_STATUS = "com.example.finance.TEST_AGENT_STATUS"
         const val ACTION_AGENT_TEST = "com.example.finance.TEST_AGENT_TEST"
         const val ACTION_AGENT_RECORD = "com.example.finance.TEST_AGENT_RECORD"
+        const val ACTION_ISLAND_TEST = "com.example.finance.TEST_ISLAND"
     }
 }

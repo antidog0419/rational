@@ -132,12 +132,30 @@ class UserSettings(context: Context) {
         if (at - a11yLastEventAt >= 5_000L) a11yLastEventAt = at
     }
 
+    // ============ 悬浮窗样式（顶部灵动胶囊，2026-09-07） ============
+
+    /** 消费提醒/下单判断/AI点评/抓取完成 → 顶部灵动胶囊；关=传统侧边黄框 */
+    var islandEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ISLAND_ENABLED, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ISLAND_ENABLED, value).apply()
+        }
+
+    /** 胶囊停留秒数（3~8） */
+    var islandSeconds: Int
+        get() = prefs.getInt(KEY_ISLAND_SECONDS, 3).coerceIn(3, 8)
+        set(value) {
+            prefs.edit().putInt(KEY_ISLAND_SECONDS, value.coerceIn(3, 8)).apply()
+        }
+
     private companion object {
         const val KEY_AUTO_EXECUTE = "auto_execute_ai_search"
         const val KEY_PENDING_FETCH = "pending_bill_fetch"
         const val KEY_A11Y_CONNECTED = "a11y_service_connected"
         const val KEY_A11Y_LAST_EVENT_AT = "a11y_last_event_at"
         const val KEY_A11Y_WINDOW_OK = "a11y_window_ok"
+        const val KEY_ISLAND_ENABLED = "island_enabled"
+        const val KEY_ISLAND_SECONDS = "island_seconds"
         const val KEY_FETCH_LIMIT = "fetch_bill_limit"
         const val KEY_JUDGE_ENABLED = "judge_before_order_enabled"
         const val KEY_INTERVENTION_STRENGTH = "ai_intervention_strength"

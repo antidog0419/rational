@@ -816,6 +816,46 @@ private fun MineTabColumn(
         // 无障碍体检（#7：事件/窗口树诊断 + 修复引导）
         A11yDiagnoseCard(a11yEnabled = a11yEnabled, onOpenA11y = onOpenA11y)
 
+        // 悬浮窗样式（顶部灵动胶囊）
+        val islandOn = remember { mutableStateOf(settings.islandEnabled) }
+        val islandSec = remember { mutableStateOf(settings.islandSeconds) }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("顶部灵动胶囊提醒", style = MaterialTheme.typography.bodyMedium)
+                        Text("消费/下单判断/AI 点评/抓取完成 → 顶部胶囊滑入淡出；关 = 传统侧边黄框",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = islandOn.value,
+                        onCheckedChange = {
+                            islandOn.value = it
+                            settings.islandEnabled = it
+                        }
+                    )
+                }
+                if (islandOn.value) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(3, 5, 8).forEach { s ->
+                            FilterChip(
+                                selected = islandSec.value == s,
+                                onClick = {
+                                    islandSec.value = s
+                                    settings.islandSeconds = s
+                                },
+                                label = { Text("停留 ${s} 秒") }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // 执行层开关
         Card(modifier = Modifier.fillMaxWidth()) {
             Row(
