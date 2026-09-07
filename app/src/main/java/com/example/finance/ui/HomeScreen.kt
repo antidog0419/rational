@@ -813,6 +813,9 @@ private fun MineTabColumn(
             }
         }
 
+        // 无障碍体检（#7：事件/窗口树诊断 + 修复引导）
+        A11yDiagnoseCard(a11yEnabled = a11yEnabled, onOpenA11y = onOpenA11y)
+
         // 执行层开关
         Card(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1028,6 +1031,10 @@ private fun MineTabColumn(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            OutlinedButton(
+                onClick = { shareCsvFile(mineCtx, exportPath) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("分享 CSV（系统分享到微信/网盘…）") }
         }
         TextButton(onClick = onClearDb) {
             Text("清空本地账单库", style = MaterialTheme.typography.labelMedium)
@@ -1100,6 +1107,88 @@ private fun MineTabColumn(
  * 兼容系统里的两种写法：短名 "com.example.finance/.service.X"（settings put 写入）与
  * 全限定 "com.example.finance/com.example.finance.service.X"（小米等系统在设置页开关后写入），
  * 统一用 ComponentName 归一化后比较。 */
+// ============ #7 无障碍体检（诊断 + 修复引导） ============
+@Composable
+private fun A11yDiagnoseCard(a11yEnabled: Boolean, onOpenA11y: () -> Unit) {
+    val context = LocalContext.current
+    val settings = remember { UserSettings(context) }
+    val overlayOk = Settings.canDrawOverlays(context)
+    val listeners = Settings.Secure.getString(
+        context.contentResolver, "enabled_notification_listeners"
+    )?.contains("PaymentNotificationListener") == true
+    val lastEvent = settings.a11yLastEventAt
+    val now = System.currentTimeMillis()
+    val eventFlowing = a11yEnabled && lastEvent > 0 && now - lastEvent < 3 * 60_000L
+    val windowOk = settings.a11yWindowOk
+
+    @Composable
+    fun row(label: String, ok: Boolean, detail: String) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(if (ok) "✅" else "⚠️", style = MaterialTheme.typography.labelMedium)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("$label：", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(detail, style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("🔧 无障碍体检（自动诊断）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary)
+            row("服务", a11yEnabled, if (a11yEnabled) "已开启" else "未开启")
+            row("事件流动", eventFlowing,
+                if (eventFlowing) "正常（最近 ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(lastEvent))}）"
+                else if (lastEvent == 0L) "尚无事件（刚开启?）" else "已停滞（疑似假 Bound/冻结）")
+            row("窗口读取", windowOk, if (windowOk) "正常" else "异常（rootInActiveWindow 为空）")
+            row("悬浮窗", overlayOk, if (overlayOk) "已授权" else "未授权")
+            row("通知监听", listeners, if (listeners) "已授权" else "未授权")
+            if (a11yEnabled && (!windowOk || !eventFlowing)) {
+                Text("可能命中 MIUI「崩溃名单/冻结」：请在系统设置里把本服务 关闭→重新开启 一次；仍无效请重启手机（完整仪式见 DEV_STATUS 坑1/坑1b）。",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onOpenA11y, modifier = Modifier.weight(1f)) { Text("去无障碍设置") }
+                TextButton(onClick = {
+                    val diag = buildString {
+                        append("理伴无障碍诊断 ")
+                        append(java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(now)))
+                        append("\n服务=").append(a11yEnabled).append(" 事件流动=").append(eventFlowing)
+                        append(" 窗口读取=").append(windowOk).append(" 悬浮窗=").append(overlayOk).append(" 通知监听=").append(listeners)
+                    }
+                    val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("诊断", diag))
+                    android.widget.Toast.makeText(context, "诊断已复制，可直接粘贴发给开发者", android.widget.Toast.LENGTH_SHORT).show()
+                }, modifier = Modifier.weight(1f)) { Text("复制诊断") }
+            }
+        }
+    }
+}
+
+private fun shareCsvFile(context: Context, path: String) {
+    try {
+        val file = java.io.File(path)
+        if (!file.exists()) {
+            android.widget.Toast.makeText(context, "CSV 不存在，请先导出", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", file
+        )
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/csv"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(send, "分享账单 CSV"))
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(context, "分享失败：${e.message}", android.widget.Toast.LENGTH_LONG).show()
+    }
+}
+
 private fun isFinanceAccessibilityEnabled(context: Context): Boolean {
     return runCatching {
         val enabled = Settings.Secure.getString(

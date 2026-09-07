@@ -111,10 +111,33 @@ class UserSettings(context: Context) {
             .apply()
     }
 
+    // ============ 无障碍健康诊断（#7：服务写入，UI「我的」页展示） ============
+
+    /** 最近一次无障碍事件时间戳（服务每 ≥5s 收到事件时刷新；0=从未） */
+    var a11yLastEventAt: Long
+        get() = prefs.getLong(KEY_A11Y_LAST_EVENT_AT, 0L)
+        set(value) {
+            prefs.edit().putLong(KEY_A11Y_LAST_EVENT_AT, value).apply()
+        }
+
+    /** 服务自检：窗口树是否可读（rootInActiveWindow != null；屏幕亮时探测）。true=正常 */
+    var a11yWindowOk: Boolean
+        get() = prefs.getBoolean(KEY_A11Y_WINDOW_OK, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_A11Y_WINDOW_OK, value).apply()
+        }
+
+    /** 事件时间戳节流刷新（5 秒内只写一次，避免高频写盘） */
+    fun touchA11yEvent(at: Long = System.currentTimeMillis()) {
+        if (at - a11yLastEventAt >= 5_000L) a11yLastEventAt = at
+    }
+
     private companion object {
         const val KEY_AUTO_EXECUTE = "auto_execute_ai_search"
         const val KEY_PENDING_FETCH = "pending_bill_fetch"
         const val KEY_A11Y_CONNECTED = "a11y_service_connected"
+        const val KEY_A11Y_LAST_EVENT_AT = "a11y_last_event_at"
+        const val KEY_A11Y_WINDOW_OK = "a11y_window_ok"
         const val KEY_FETCH_LIMIT = "fetch_bill_limit"
         const val KEY_JUDGE_ENABLED = "judge_before_order_enabled"
         const val KEY_INTERVENTION_STRENGTH = "ai_intervention_strength"

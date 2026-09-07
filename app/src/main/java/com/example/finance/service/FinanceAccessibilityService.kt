@@ -108,6 +108,7 @@ class FinanceAccessibilityService : AccessibilityService() {
         floatingWindowManager = FloatingWindowManager(this)
         startEventListener()
         postUILog("♿ 无障碍服务已连接，可开始抓取账单")
+        startWindowHealthProbe() // #7 无障碍健康自检（诊断用）
  // 处理"点了抓取但服务当时未连接"的待办请求（避免点了没反应）
  // 注意：只有在【本应用处于前台】时才立即执—若此刻在系统设置页，
  // 后台拉起支付宝会被小鸿蒙拦截，此时保留标记，等用户回到本应用onResume 触发
@@ -126,6 +127,24 @@ class FinanceAccessibilityService : AccessibilityService() {
  /** 当前活跃窗口是否就是我们自己App（前台拉起其它应用才不会被系统拦截） */
     private fun isOwnAppInForeground(): Boolean {
         return runCatching { rootInActiveWindow?.packageName == packageName }.getOrDefault(false)
+    }
+
+    private fun startWindowHealthProbe() {
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        val runnable = object : Runnable {
+            override fun run() {
+                try {
+                    val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                    if (pm.isInteractive) {
+                        val ok = runCatching { rootInActiveWindow != null }.getOrDefault(false)
+                        UserSettings(this@FinanceAccessibilityService).a11yWindowOk = ok
+                    }
+                } catch (_: Exception) {
+                }
+                h.postDelayed(this, 20_000L)
+            }
+        }
+        h.postDelayed(runnable, 5_000L)
     }
 
     private fun startEventListener() {
@@ -2104,6 +2123,7 @@ class FinanceAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         val now = System.currentTimeMillis()
+        runCatching { UserSettings(this).touchA11yEvent(now) } // #7 诊断：事件流动时间戳（节流写盘）
  // 统一节流：无论是否命中支付页，每 2 秒最多处理一个事件（防刷耗电
         if (now - lastProcessedTime < THROTTLE_MS) return
         lastProcessedTime = now

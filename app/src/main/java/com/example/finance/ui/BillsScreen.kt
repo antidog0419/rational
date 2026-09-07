@@ -128,6 +128,12 @@ fun BillsTabColumn(
     }
     val visibleCount = remember(visibleGroups) { visibleGroups.sumOf { it.rows.size } }
 
+    // #5 报表：近 6 月趋势 + 本月分类占比（纯 Canvas 手绘）
+    val trendPoints = remember(all) { computeTrend(all) }
+    val catShare = remember(all, dayPrefix) {
+        computeCatShare(all.filter { it.dayBucket.startsWith(dayPrefix) })
+    }
+
     // 弹窗状态
     var showAdd by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<BillEntity?>(null) }
@@ -191,6 +197,10 @@ fun BillsTabColumn(
                 }
             }
         }
+
+        // ---------- 报表：近 6 月趋势 + 本月分类占比 ----------
+        item(key = "trend") { TrendChartCard(trendPoints) }
+        item(key = "cat-share") { CatShareCard(catShare, monthTotal) }
 
         // ---------- 日历视图（每天花费） ----------
         item(key = "calendar") {

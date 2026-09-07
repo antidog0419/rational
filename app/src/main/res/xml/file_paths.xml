@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CSV 导出文件分享路径：App 外部文件目录(私有)内都可分享 -->
+<paths>
+    <external-files-path name="exports" path="." />
+    <files-path name="exports_internal" path="." />
+</paths>

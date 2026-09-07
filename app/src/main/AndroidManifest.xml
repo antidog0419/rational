@@ -79,6 +79,17 @@
             android:foregroundServiceType="mediaProjection"
             android:stopWithTask="false" />
 
+        <!-- CSV 导出文件分享（我的 → 导出 → 系统分享） -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>
