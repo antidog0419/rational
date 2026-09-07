@@ -198,17 +198,17 @@ fun BillsTabColumn(
             }
         }
 
-        // ---------- 报表：近 6 月趋势 + 本月分类占比 ----------
-        item(key = "trend") { TrendChartCard(trendPoints) }
-        item(key = "cat-share") { CatShareCard(catShare, monthTotal) }
-
-        // ---------- 日历视图（每天花费） ----------
-        item(key = "calendar") {
-            CalendarCard(
+        // ---------- 记录浏览：日历 / 趋势 / 分类（左右滑动切换，默认日历） ----------
+        item(key = "pager") {
+            RecordPager(
                 monthSel = monthSel,
                 dayTotals = dayTotals,
                 selectedDay = selectedDay,
                 onSelectDay = { selectedDay = if (selectedDay == it) null else it },
+                onShowAll = { selectedDay = null },
+                trendPoints = trendPoints,
+                catShare = catShare,
+                monthTotal = monthTotal,
             )
         }
 
