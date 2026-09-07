@@ -1,0 +1,91 @@
+// agent/AgentGraph.kt
+// 识屏智能体 DI（移植自 sult_liban/LibanApplication.AppGraph，MIT）：
+// 独立 Room 库(agent.db)+ 配置(DataStore)+ MLKit OCR + OkHttp + AgentOrchestrator。
+// 首次启动用理伴真实数据（BudgetStore 预算 / FinanceDb 当月已花）播种默认画像与储蓄目标。
+
+package com.example.finance.agent
+
+import android.content.Context
+import com.example.finance.config.ConfigRepository
+import com.example.finance.data.AppDao
+import com.example.finance.data.AppDatabase
+import com.example.finance.data.AppRepository
+import com.example.finance.data.BudgetStore
+import com.example.finance.data.FinanceDb
+import com.example.finance.data.SavingGoalEntity
+import com.example.finance.data.UserProfileEntity
+import com.example.finance.data.monthRange
+import com.example.finance.ocr.MlKitChineseOcrProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import java.time.LocalDate
+import java.util.concurrent.TimeUnit
+
+object AgentGraph {
+
+    val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+        encodeDefaults = true
+    }
+
+    lateinit var repository: AppRepository
+        private set
+    lateinit var configRepository: ConfigRepository
+        private set
+    lateinit var orchestrator: AgentOrchestrator
+        private set
+    private lateinit var dao: AppDao
+
+    @Volatile
+    private var ready = false
+
+    fun init(context: Context) {
+        if (ready) return
+        synchronized(this) {
+            if (ready) return
+            val appCtx = context.applicationContext
+            val db = AppDatabase.create(appCtx)
+            dao = db.appDao()
+            repository = AppRepository(db.appDao(), json)
+            configRepository = ConfigRepository(appCtx)
+            val client = OkHttpClient.Builder()
+                .connectTimeout(2, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
+                .writeTimeout(3, TimeUnit.SECONDS)
+                .callTimeout(5, TimeUnit.SECONDS)
+                .build()
+            orchestrator = AgentOrchestrator(
+                repository = repository,
+                configRepository = configRepository,
+                ocrProvider = MlKitChineseOcrProvider(),
+                httpClient = client,
+                json = json,
+            )
+            ready = true
+        }
+    }
+
+    /**
+     * 用理伴真实数据播种默认画像（仅首次）：
+     * 月预算=BudgetStore 总额，已花=FinanceDb 本月合计；默认储蓄目标=月预算×6（6 个月后）。
+     */
+    suspend fun seedFromFinance(context: Context) = withContext(Dispatchers.IO) {
+        init(context)
+        if (dao.getProfile() != null) return@withContext
+        val ctx = context.applicationContext
+        val monthlyCents = (BudgetStore.monthlyBudget() * 100).toLong().coerceAtLeast(0)
+        val (from, to) = monthRange()
+        val spentCents = runCatching { FinanceDb.get(ctx).billDao().sumBetweenOnce(from, to) }
+            .getOrDefault(0.0)
+        repository.saveProfile(monthlyCents, (spentCents * 100).toLong().coerceAtLeast(0))
+        repository.saveGoal(
+            name = "我的小目标",
+            targetCents = (monthlyCents * 6).coerceAtLeast(1),
+            currentCents = 0,
+            deadlineEpochDay = LocalDate.now().plusMonths(6).toEpochDay(),
+        )
+    }
+}

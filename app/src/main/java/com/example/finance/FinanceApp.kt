@@ -2,6 +2,7 @@ package com.example.finance
 
 import android.app.Application
 import android.util.Log
+import com.example.finance.agent.AgentGraph
 import com.example.finance.data.AccessibilityEventRepository
 import com.example.finance.data.BudgetStore
 import com.example.finance.data.FinanceDb
@@ -43,6 +44,13 @@ class FinanceApp : Application() {
         // 本地账单库初始化（持久化所有入账记录）并绑定到事件仓库
         val db = FinanceDb.init(this)
         AccessibilityEventRepository.attachDb(db)
+
+        // 识屏智能体（移植自 sult_liban）：初始化 DI + 用真实预算/账单播种默认画像
+        AgentGraph.init(this)
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { AgentGraph.seedFromFinance(this@FinanceApp) }
+                .onFailure { Log.e("FinanceApp", "识屏智能体初始化失败", it) }
+        }
 
         // 一次性来源归一化（老库里的 "支付宝账单/美团账单/本地演示" → 规范名），IO 后台执行
         CoroutineScope(Dispatchers.IO).launch {
