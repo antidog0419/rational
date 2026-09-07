@@ -636,6 +636,9 @@ private fun ConsultTab(
     ) {
         SectionTitle("AI 咨询中心")
 
+        // 识屏助手（AI 购物决策：录屏/OCR/手动分析/最近决策）
+        AgentPanel()
+
         // AI 建议
         aiAdvice.firstOrNull()?.let { advice ->
             Card(
@@ -809,9 +812,6 @@ private fun MineTabColumn(
                 }
             }
         }
-
-        // 识屏助手（sult_liban 移植的第二感知通道：录屏+OCR+技能决策）
-        AgentPanel()
 
         // 执行层开关
         Card(modifier = Modifier.fillMaxWidth()) {
