@@ -24,6 +24,7 @@ import com.example.finance.ai.AIService
 import com.example.finance.parsing.BillAmountText
 import com.example.finance.parsing.BillKeys
 import com.example.finance.parsing.BillTimeParser
+import com.example.finance.parsing.JudgeAmount
 import com.example.finance.parsing.MerchantText
 import com.example.finance.utils.FloatingWindowManager // 新增导入
 import kotlinx.coroutines.*
@@ -194,6 +195,79 @@ class FinanceAccessibilityService : AccessibilityService() {
             Log.e(TAG, "📸 A11yShot 异常: ${t.message}")
         }
     }
+
+    /** 方案A：无障碍截图(API30+，免录屏授权) → MLKit OCR 整行 → 同一行级规则取"应付金额" */
+    private suspend fun ocrJudgeAmount(): Double? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        val bitmap = try {
+            withTimeoutOrNull(4_500L) { a11yShotBitmap() }
+        } catch (t: Throwable) {
+            Log.w(TAG, "📸 截图取价 异常: ${t.message}")
+            null
+        }
+        if (bitmap == null) {
+            Log.d(TAG, "📸 截图取价: 未取得截图")
+            return null
+        }
+        try {
+            val doc = com.example.finance.agent.AgentGraph.ocrProvider.recognize(bitmap)
+            Log.d(
+                TAG,
+                "📸 截图取价 OCR ${doc.lines.size} 行: " +
+                    doc.lines.take(18).joinToString(" | ") { it.text.take(18) }
+            )
+            val amt = JudgeAmount.pick(
+                doc.lines.map { JudgeAmount.Row(it.text, it.box.top, it.box.bottom, it.box.centerY) }
+            )
+            Log.d(TAG, "📸 截图取价 结果: " + (amt?.let { "¥" + "%.2f".format(it) } ?: "无"))
+            return amt
+        } catch (t: Throwable) {
+            Log.w(TAG, "📸 截图取价 OCR 失败: ${t.message}")
+            return null
+        } finally {
+            runCatching { bitmap.recycle() }
+        }
+    }
+
+    /** 无障碍截图(API30+) → Bitmap（ARGB 深拷贝，安全回收 hardwareBuffer） */
+    private suspend fun a11yShotBitmap(): android.graphics.Bitmap? =
+        kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            val exec = ContextCompat.getMainExecutor(this)
+            exec.execute {
+                try {
+                    takeScreenshot(
+                        Display.DEFAULT_DISPLAY,
+                        exec,
+                        object : AccessibilityService.TakeScreenshotCallback {
+                            override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                                var result: android.graphics.Bitmap? = null
+                                try {
+                                    val buffer = screenshot.hardwareBuffer
+                                    val wrapped =
+                                        android.graphics.Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                                    if (wrapped != null) {
+                                        result = wrapped.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                                        wrapped.recycle()
+                                    }
+                                    buffer.close()
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "📸 截图转换失败: ${t.message}")
+                                }
+                                if (cont.isActive) cont.resumeWith(Result.success(result))
+                            }
+
+                            override fun onFailure(errorCode: Int) {
+                                Log.w(TAG, "📸 无障碍截图失败 code=$errorCode")
+                                if (cont.isActive) cont.resumeWith(Result.success(null))
+                            }
+                        },
+                    )
+                } catch (t: Throwable) {
+                    Log.w(TAG, "📸 takeScreenshot 调用失败: ${t.message}")
+                    if (cont.isActive) cont.resumeWith(Result.success(null))
+                }
+            }
+        }
 
     private fun startWindowHealthProbe() {        val h = android.os.Handler(android.os.Looper.getMainLooper())
         val runnable = object : Runnable {
@@ -2276,46 +2350,22 @@ class FinanceAccessibilityService : AccessibilityService() {
                 for (i in 0 until node.childCount) node.getChild(i)?.let { scanAmt(it) }
             }
             try { scanAmt(root) } catch (t: Throwable) { /* 忽略 */ }
-            // 金额挑选：费用词行(共减/立减/券/运费…)排除；其拆分的独立"¥1.8"式纯金额邻行也排除；
-            // 含应付词(实付/合计/支付/提交…)行内金额优先(绝不被费用邻行误杀)，否则取最下方可用金额
-            val money = Regex("""[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)""")
-            val feeWords = listOf("共减", "立减", "已减", "满减", "优惠券", "红包", "运费", "配送", "打包", "起送", "优惠", "代金")
-            val payWords = listOf("应付", "实付", "合计", "共需", "需付", "支付", "提交", "确认", "结算", "总价", "小计")
-            val purePrice = Regex("""^[¥￥]\s*[0-9]+(?:\.[0-9]{1,2})?$""")
-            val feeLines = ArrayList<PriceLine>()
-            for (line in priceLines) {
-                if (feeWords.any { w -> line.text.contains(w) }) feeLines.add(line)
-            }
-            val candidates = ArrayList<Pair<Double, PriceLine>>()
-            for (line in priceLines) {
-                val m = money.find(line.text) ?: continue
-                val amount = m.groupValues[1].toDoubleOrNull() ?: continue
-                val hasFee = feeWords.any { w -> line.text.contains(w) }
-                val hasPayWord = payWords.any { w -> line.text.contains(w) }
-                val isPurePrice = purePrice.matches(line.text.trim())
-                // 拆分行排除：仅对"纯金额节点"生效（如独立的 ¥1.8），且仅当与费用行同行重叠
-                // 或紧贴其下方(≤40px)。含应付标签的行永远保留。
-                val nearFee = !hasPayWord && isPurePrice && feeLines.any { f ->
-                    (f.top < line.bottom && f.bottom > line.top) ||
-                            (line.top >= f.bottom && line.top - f.bottom <= 40)
-                }
-                if (!hasFee && !nearFee) candidates.add(amount to line)
-            }
-            val sorted = candidates.sortedByDescending { it.second.cy }
-            val chosen = sorted.firstOrNull { (_, l) -> payWords.any { w -> l.text.contains(w) } }
-                ?: sorted.firstOrNull()
-            val amount = chosen?.first
+            // 树金额（纯规则 parsing/JudgeAmount；OCR 截图取价优先覆盖它）
+            val treeAmount = JudgeAmount.pick(
+                priceLines.map { JudgeAmount.Row(it.text, it.top, it.bottom, it.cy) }
+            )
+            Log.d(
+                TAG,
+                "🛒 树取价: " + (treeAmount?.let { "¥" + "%.2f".format(it) } ?: "无") +
+                        "（${priceLines.size} 行）"
+            )
+            // 方案A：无障碍截图 → 本地 OCR 整行 → 同一纯规则（视觉行完整，无控件树节点拆分问题）
+            val amount = ocrJudgeAmount() ?: treeAmount
             if (amount == null) {
-                logJudgeMiss("无可用应付金额", priceLines.map { it.text }, emptyList(),
+                logJudgeMiss("无可用应付金额(树+OCR)", priceLines.map { it.text }, emptyList(),
                     strongCta, weakCta, sumInfo, feedish)
                 return@launch
             }
-            Log.d(
-                TAG,
-                "🛒 金额候选(可见, 底→上): " + sorted.take(8)
-                    .joinToString { a -> "¥" + "%.2f".format(a.first) + "@y" + a.second.cy } +
-                        " | 选定 ¥" + "%.2f".format(amount) + " | 行=" + chosen.second.text.take(24)
-            )
             val merchant = pickMerchantName(root, markers, h) ?: "待下单商品"
 
             val key = "$pkg|$merchant|$amount"

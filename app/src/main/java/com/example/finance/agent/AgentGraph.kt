@@ -39,6 +39,9 @@ object AgentGraph {
         private set
     private lateinit var dao: AppDao
 
+    /** MLKit 中文 OCR（复用同一识别器实例；供识屏管线与"下单判断截图取价"共用） */
+    val ocrProvider = MlKitChineseOcrProvider()
+
     @Volatile
     private var ready = false
 
@@ -60,7 +63,7 @@ object AgentGraph {
             orchestrator = AgentOrchestrator(
                 repository = repository,
                 configRepository = configRepository,
-                ocrProvider = MlKitChineseOcrProvider(),
+                ocrProvider = ocrProvider,
                 httpClient = client,
                 json = json,
             )
