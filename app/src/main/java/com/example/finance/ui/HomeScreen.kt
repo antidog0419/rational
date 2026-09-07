@@ -810,6 +810,9 @@ private fun MineTabColumn(
             }
         }
 
+        // 识屏助手（sult_liban 移植的第二感知通道：录屏+OCR+技能决策）
+        AgentPanel()
+
         // 执行层开关
         Card(modifier = Modifier.fillMaxWidth()) {
             Row(
