@@ -2,6 +2,25 @@
 
 ---
 
+## 【2026-09-07 16:45】真机故障:无障碍"崩溃名单"致窗口读取全断(与版本无关)+ 修复仪式
+
+- **症状**:回退到旧版(或任意版本)后抓取仍失败——支付宝/美团打开后引擎无任何导航日志,「点我的」不执行;`TEST_DUMP_SCREEN` 持续报 `rootInActiveWindow 为空`(连自己 App 前台也读不到)。
+- **根因**:之前某轮服务异常后,系统把无障碍服务记入崩溃名单。`dumpsys accessibility` 会同时看到:
+  - `Bound services:{...理伴...}` / `Enabled services:{...}`(看似正常),以及
+  - `Crashed services:{{com.example.finance/...}}` ← 关键判据。
+  - 崩溃名单存在期间服务虽 Bound,但 `rootInActiveWindow` 恒为空 → 引擎看不到任何节点,点「我的」无从发生。
+- **修复仪式(崩溃清理版,比原"修复仪式"多 force-stop 步骤,顺序重要)**:
+  1. `settings put secure enabled_accessibility_services ''`(先停用)
+  2. `am force-stop com.example.finance`(清掉已崩溃的绑定)
+  3. `settings put secure enabled_accessibility_services 'com.example.finance/com.example.finance.service.FinanceAccessibilityService'`
+  4. `settings put secure accessibility_enabled 1`
+  5. `am start -n com.example.finance/.ui.MainActivity` 前台拉起
+  6. 验证:logcat 出现 `♿ 无障碍服务已连接`;**`dumpsys accessibility` 的 Crashed services 为空**;`TEST_DUMP_SCREEN` 能打印窗口节点。
+- **验证结果(a681b64,修复后)**:支付宝抓取完整跑通——`点「我的」@(972,2319)` → 视觉定位「账单」→ 入账页 6 屏 → `🎉 抓取完成:共识别 35 笔(去重后 35 条)`,逐笔带真实时间。
+- **遗留观察**:本次 3 笔入账日志时间显示 `2024-09-06`(设备 `date` 为 2026-09-07),年份回退疑点待查(可能设备时钟曾在 2024 或去重/锚点链路问题),后续单独核对,勿与本次修复混淆。
+
+---
+
 ## 【2026-09-07】P0 工程护栏 + P2 解析器测试化 — 全部编译/单测通过
 
 > 背景:仓库此前只有 1 个 init 提交,且 09-06 发生过"GBK 误回写损坏 850+ 中文字符、靠 .class 词典恢复"的事故。本轮先补安全网再动代码;按主题分提交。

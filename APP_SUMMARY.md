@@ -89,6 +89,7 @@ Finance-phone-backup-2150.apk               手机完好旧版 APK 备份(2026-0
 
 ### 真机环境(Redmi K60 Pro 22127RK46C,Android 14/MIUI,无线 adb)
 - **坑1**:APK 更新/force-stop 后无障碍被重置且会"假 Bound"(事件全不来,特征是 logcat 无服务连接日志)。**修复仪式**:`settings put` 写入 → `am start` 前台拉起 → 确认出现 `♿ 无障碍服务已连接`。
+- **坑1b(2026-09-07 新增)**:无障碍服务进**系统崩溃名单**后,症状是「任意版本抓取都停在点「我的」/无导航日志」,判据 `dumpsys accessibility` 见 `Crashed services:{...finance...}` 且 `rootInActiveWindow` 恒空(TEST_DUMP_SCREEN 报失败,连自己前台也读不到)。**清理仪式**:先 `settings put enabled_accessibility_services ''` → `am force-stop` → 再写入全名 + `accessibility_enabled 1` → 前台拉起 → 确认 Crashed services 为空且 DUMP 能出节点(顺序不可反,否则崩溃态残留)。
 - **坑2**:理伴后台被小米冻结(事件/协程全停,`dumpsys` 不显示)。需要「省电策略=无限制 + 自启动」;冻结后拉起前台恢复。
 - **坑3**:无线 adb 端口每次配对变化;uiautomator 不可用 → 用 `TEST_DUMP_SCREEN`。
 - **坑4**:后台跨应用拉起平台 App 可能被拦(表现为"打开 X 秒后仍不在前台"),理伴前台时重发广播即可。
