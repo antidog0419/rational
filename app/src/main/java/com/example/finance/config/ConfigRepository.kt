@@ -152,21 +152,31 @@ class ConfigRepository(private val context: Context, private val preset: ApiConf
     }
 }
 
+// 与 utils/SecurePrefs 同一策略：AndroidKeyStore 不可用/失败时回退明文，绝不丢配置（本机 Redmi 即 Keystore 不可用）。
 private class KeystoreCrypto {
     private val alias = "liban_api_config_aes"
 
-    fun encrypt(value: String): String {
+    fun encrypt(value: String): String = try {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
-        return Base64.encodeToString(cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
+        Base64.encodeToString(cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
+    } catch (t: Throwable) {
+        android.util.Log.w("AgentConfig", "Keystore 不可用，识屏 Key 明文回退: ${t.message}")
+        value.trim()
     }
 
     fun decrypt(value: String): String {
-        val bytes = Base64.decode(value, Base64.NO_WRAP)
-        require(bytes.size > 12) { "密钥配置损坏" }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
-        return cipher.doFinal(bytes.copyOfRange(12, bytes.size)).toString(Charsets.UTF_8)
+        if (value.isBlank()) return value
+        return try {
+            val bytes = Base64.decode(value, Base64.NO_WRAP)
+            require(bytes.size > 12) { "密钥配置损坏" }
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
+            cipher.doFinal(bytes.copyOfRange(12, bytes.size)).toString(Charsets.UTF_8)
+        } catch (t: Throwable) {
+            // 非密文（明文回退存储）或 Keystore 失效 → 原样返回，保证配置可用
+            value
+        }
     }
 
     private fun key(): SecretKey {
