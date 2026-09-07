@@ -26,6 +26,11 @@ android {
             useSupportLibrary = true
         }
 
+        // 瘦身：只保留真机 ABI（K60 Pro=arm64-v8a；armeabi-v7a 兼容老设备；去掉 x86/x86_64 模拟器 so）
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+
         // DeepSeek 默认配置：命令行/IDE 可用 -PdeepseekApiKey=sk-xxx 注入；
         // 也支持在 App 设置页运行时填写（持久化）。此处默认留空即可。
         val deepseekApiKey = (project.findProperty("deepseekApiKey") as String?) ?: ""
@@ -38,7 +43,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -115,7 +121,8 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 
     // ===== 识屏智能体（移植自 sult_liban，MIT）：MediaProjection + MLKit OCR + 技能决策 + 比价 =====
-    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    // OCR 用"不内置版"（中文模型由 Google Play 服务按需下载，首次识别需联网）：APK 56MB → ~7MB 量级
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-chinese:16.0.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.datastore:datastore-preferences:1.1.7")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
