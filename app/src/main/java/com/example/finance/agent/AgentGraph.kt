@@ -37,6 +37,8 @@ object AgentGraph {
         private set
     lateinit var orchestrator: AgentOrchestrator
         private set
+    lateinit var httpClient: OkHttpClient
+        private set
     private lateinit var dao: AppDao
 
     /** MLKit 中文 OCR（复用同一识别器实例；供识屏管线与"下单判断截图取价"共用） */
@@ -60,6 +62,7 @@ object AgentGraph {
                 .writeTimeout(3, TimeUnit.SECONDS)
                 .callTimeout(5, TimeUnit.SECONDS)
                 .build()
+            httpClient = client
             orchestrator = AgentOrchestrator(
                 repository = repository,
                 configRepository = configRepository,

@@ -28,12 +28,21 @@ import com.example.finance.parsing.JudgeAmount
 import com.example.finance.parsing.MerchantText
 import com.example.finance.utils.FloatingWindowManager // 新增导入
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class FinanceAccessibilityService : AccessibilityService() {
+/** LLM 结算页应付金额提取提示词（OCR 可能丢小数点/粘连，模型结合上下文语义判断） */
+private val LLM_PAYABLE_PROMPT = """
+你是订单结算页信息提取器，只输出 JSON：{"payable_cents": 整数或null, "payable_text": "页面原文或null"}。
+结算页会同时出现"券前/共减/红包/商品单价/合计/应付"。payable_cents 只取用户最终应付：
+优先"应付/实付/合计(不含券前)/极速支付等支付按钮上的金额"；只有券前价而没有应付/合计时给 null 并在 payable_text 注明。
+金额一律按人民币"分"输出："¥17.99"→1799。OCR 常丢失小数点（如"¥1799"实际是 17.99），结合商品与上下文判断合理值；
+无法判断就返回 null，绝不猜测。宁缺勿错。
+""".trimIndent()
 
+class FinanceAccessibilityService : AccessibilityService() {
     companion object {
         const val TAG = "FinanceAccessibility"
 
@@ -86,6 +95,10 @@ class FinanceAccessibilityService : AccessibilityService() {
     // 灵动胶囊联动：最近一次"实时消费提醒"时刻；其后的 AI 点评自动上胶囊
     private var lastRealtimeRemindAt = 0L
     private var adviceIslandJob: Job? = null
+
+    // OCR/LLM 取价缓存：同页停留 10s 内复用，避免每 4s 重复截图/云端调用
+    private var ocrCacheAt = 0L
+    private var ocrCacheAmount: Double? = null
 
     private var eventListenerJob: Job? = null
 
@@ -196,9 +209,12 @@ class FinanceAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** 方案A：无障碍截图(API30+，免录屏授权) → MLKit OCR 整行 → 同一行级规则取"应付金额" */
+    /** 方案A：无障碍截图(API30+，免录屏授权) → OCR → LLM 语义取应付金额（本地规则兜底） */
     private suspend fun ocrJudgeAmount(): Double? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        val now = System.currentTimeMillis()
+        if (now - ocrCacheAt in 0L..10_000L) return ocrCacheAmount // 同页停留防抖
+        ocrCacheAt = now
         val bitmap = try {
             withTimeoutOrNull(4_500L) { a11yShotBitmap() }
         } catch (t: Throwable) {
@@ -207,6 +223,7 @@ class FinanceAccessibilityService : AccessibilityService() {
         }
         if (bitmap == null) {
             Log.d(TAG, "📸 截图取价: 未取得截图")
+            ocrCacheAmount = null
             return null
         }
         try {
@@ -216,16 +233,67 @@ class FinanceAccessibilityService : AccessibilityService() {
                 "📸 截图取价 OCR ${doc.lines.size} 行: " +
                     doc.lines.take(18).joinToString(" | ") { it.text.take(18) }
             )
-            val amt = JudgeAmount.pick(
+            val textBlock = doc.lines.joinToString("\n") { it.text }
+            val llm = llmPayableAmount(textBlock)
+            val local = JudgeAmount.pick(
                 doc.lines.map { JudgeAmount.Row(it.text, it.box.top, it.box.bottom, it.box.centerY) }
             )
-            Log.d(TAG, "📸 截图取价 结果: " + (amt?.let { "¥" + "%.2f".format(it) } ?: "无"))
+            val amt = llm ?: local
+            Log.d(
+                TAG,
+                "📸 截图取价 结果: " + (amt?.let { "¥" + "%.2f".format(it) } ?: "无") +
+                    "（LLM=" + (llm?.let { "¥" + "%.2f".format(it) } ?: "-") +
+                    " 本地规则=" + (local?.let { "¥" + "%.2f".format(it) } ?: "-") + "）"
+            )
+            ocrCacheAmount = amt
             return amt
         } catch (t: Throwable) {
             Log.w(TAG, "📸 截图取价 OCR 失败: ${t.message}")
+            ocrCacheAmount = null
             return null
         } finally {
             runCatching { bitmap.recycle() }
+        }
+    }
+
+    /** LLM(v4-flash) 语义提取应付金额（修 OCR 丢小数点/粘连、识别"应付/合计"语义） */
+    private suspend fun llmPayableAmount(ocrText: String): Double? {
+        val cfg = com.example.finance.agent.AgentGraph.configRepository.configuration.first()
+        if (!cfg.llmConfigured) {
+            Log.d(TAG, "🤖 LLM 取价未配置，仅用本地规则")
+            return null
+        }
+        return try {
+            val raw = withTimeoutOrNull(5_000) {
+                com.example.finance.agent.callTextModel(
+                    com.example.finance.agent.AgentGraph.httpClient,
+                    com.example.finance.agent.AgentGraph.json,
+                    cfg.llmEndpoint, cfg.llmApiKey, cfg.llmModel,
+                    LLM_PAYABLE_PROMPT,
+                    "订单结算页 OCR 行文本：\n" + ocrText.take(4_000),
+                    maxTokens = 400,
+                )
+            }
+            if (raw == null) {
+                Log.d(TAG, "🤖 LLM 取价超时/失败")
+                return null
+            }
+            val m = Regex(""""payable_cents"\s*:\s*(\d+)""").find(raw)
+            if (m == null) {
+                Log.d(TAG, "🤖 LLM 取价无金额字段: ${raw.take(140)}")
+                return null
+            }
+            val cents = m.groupValues[1].toLongOrNull()
+            if (cents == null || cents !in 100L..10_000_000L) {
+                Log.d(TAG, "🤖 LLM 取价金额越界")
+                return null
+            }
+            val yuan = cents / 100.0
+            Log.d(TAG, "🤖 LLM 取价 = ¥" + "%.2f".format(yuan))
+            yuan
+        } catch (t: Throwable) {
+            Log.w(TAG, "🤖 LLM 取价失败: ${t.message}")
+            null
         }
     }
 
