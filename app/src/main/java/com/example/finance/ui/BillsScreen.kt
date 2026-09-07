@@ -118,6 +118,16 @@ fun BillsTabColumn(
     }
     val dayGroups = remember(filtered) { groupByDay(filtered) }
 
+    // 日历选中日（dayBucket；null=整月视图）
+    var selectedDay by rememberSaveable { mutableStateOf<String?>(null) }
+    val dayTotals = remember(filtered) {
+        filtered.groupingBy { it.dayBucket }.fold(0.0) { acc, b -> acc + b.amount }
+    }
+    val visibleGroups = remember(dayGroups, selectedDay) {
+        if (selectedDay == null) dayGroups else dayGroups.filter { it.dayBucket == selectedDay }
+    }
+    val visibleCount = remember(visibleGroups) { visibleGroups.sumOf { it.rows.size } }
+
     // 弹窗状态
     var showAdd by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<BillEntity?>(null) }
@@ -134,7 +144,7 @@ fun BillsTabColumn(
         // ---------- 月份切换 ----------
         item(key = "month-nav") {
             Card(modifier = Modifier.fillMaxWidth()) {
-                MonthSwitcherRow(monthSel) { monthSel = it }
+                MonthSwitcherRow(monthSel) { monthSel = it; selectedDay = null }
             }
         }
 
@@ -180,6 +190,16 @@ fun BillsTabColumn(
                     }
                 }
             }
+        }
+
+        // ---------- 日历视图（每天花费） ----------
+        item(key = "calendar") {
+            CalendarCard(
+                monthSel = monthSel,
+                dayTotals = dayTotals,
+                selectedDay = selectedDay,
+                onSelectDay = { selectedDay = if (selectedDay == it) null else it },
+            )
         }
 
         // ---------- 来源筛选 + 手动补记 ----------
@@ -256,13 +276,19 @@ fun BillsTabColumn(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("$monthTag 明细 · ${filtered.size} 笔",
+                Text(
+                    if (selectedDay == null) "$monthTag 明细 · $visibleCount 笔"
+                    else "${dayTitle(selectedDay!!)} 明细 · $visibleCount 笔",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary)
-                Text(if (filter == BillSources.ALL) "全部来源" else "筛选：$filter",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (selectedDay != null) {
+                    TextButton(onClick = { selectedDay = null }) { Text("返回整月") }
+                } else {
+                    Text(if (filter == BillSources.ALL) "全部来源" else "筛选：$filter",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
 
@@ -286,7 +312,18 @@ fun BillsTabColumn(
             }
         }
 
-        for (group in dayGroups) {
+        if (filtered.isNotEmpty() && visibleGroups.isEmpty()) {
+            item(key = "empty-day") {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text("该日没有符合条件的账单：试试取消来源筛选，或「返回整月」。",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        for (group in visibleGroups) {
             item(key = "day-${group.dayBucket}") {
                 val daySum = group.rows.sumOf { it.amount }
                 Row(
