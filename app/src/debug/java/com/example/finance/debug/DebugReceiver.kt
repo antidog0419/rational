@@ -130,6 +130,58 @@ class DebugReceiver : BroadcastReceiver() {
                 Log.d(TAG, "TEST_CLEAR_BILLS 已清空本地账单库")
             }
 
+            ACTION_AGENT_STATUS -> {
+                CoroutineScope(Dispatchers.IO).launch {
+                    runCatching {
+                        com.example.finance.agent.AgentGraph.seedFromFinance(context)
+                        val repo = com.example.finance.agent.AgentGraph.repository
+                        val profile = repo.getProfile()
+                        val goal = repo.getGoal()
+                        android.util.Log.d(
+                            "FinanceAgent",
+                            "STATUS profile=月预算¥${profile.monthlyBudgetCents / 100.0} 已花¥${profile.currentSpentCents / 100.0} " +
+                                "goal=${goal?.name ?: "无"} 目标¥${goal?.targetAmountCents?.div(100.0) ?: 0}"
+                        )
+                    }.onFailure {
+                        android.util.Log.e("FinanceAgent", "STATUS 失败: ${it.message}")
+                    }
+                }
+                Log.d(TAG, "TEST_AGENT_STATUS 已触发")
+            }
+
+            ACTION_AGENT_TEST -> {
+                CoroutineScope(Dispatchers.IO).launch {
+                    runCatching {
+                        com.example.finance.agent.AgentGraph.syncLlmFromFinance(context) // 每次测试前同步 DeepSeek
+                        com.example.finance.agent.AgentGraph.seedFromFinance(context)
+                        val scene = com.example.finance.scene.SceneContext(
+                            sceneType = "manual_test",
+                            product = com.example.finance.scene.Product(
+                                name = "索尼 WH-1000XM5 无线降噪耳机",
+                                category = "electronics",
+                                brand = "索尼",
+                                model = "WH-1000XM5",
+                            ),
+                            price = com.example.finance.scene.PriceInfo(currentCents = 2_999_00),
+                            signals = com.example.finance.scene.SceneSignals(discount = true, limitedTime = true),
+                            confidence = 0.9,
+                            productConfidence = 0.9,
+                            priceConfidence = 0.9,
+                        )
+                        val (_, decision) = com.example.finance.agent.AgentGraph.orchestrator.analyzeScene(scene) {
+                            android.util.Log.d("FinanceAgent", "state=$it")
+                        }
+                        android.util.Log.d(
+                            "FinanceAgent",
+                            "决策=${decision.riskLevel.name}/${decision.recommendation.name} title=${decision.display.title} | ${decision.display.summary} | factors=${decision.factors} | points=${decision.display.keyPoints}"
+                        )
+                    }.onFailure {
+                        android.util.Log.e("FinanceAgent", "TEST 失败: ${it.message}")
+                    }
+                }
+                Log.d(TAG, "TEST_AGENT_TEST 已触发（离线技能决策）")
+            }
+
             ACTION_CONFIGURE -> {
                 val key = intent.getStringExtra("apiKey").orEmpty()
                 val model = intent.getStringExtra("model").orEmpty()
@@ -165,5 +217,7 @@ class DebugReceiver : BroadcastReceiver() {
         const val ACTION_WEEKLY = "com.example.finance.TEST_WEEKLY"
         const val ACTION_EXPORT_CSV = "com.example.finance.TEST_EXPORT_CSV"
         const val ACTION_CLEAR_BILLS = "com.example.finance.TEST_CLEAR_BILLS"
+        const val ACTION_AGENT_STATUS = "com.example.finance.TEST_AGENT_STATUS"
+        const val ACTION_AGENT_TEST = "com.example.finance.TEST_AGENT_TEST"
     }
 }

@@ -31,3 +31,7 @@ taobao_home_dump.txt
 # IDE (whole dir)
 /.idea/
 *.repair-report.txt
+
+# 外部素材(sult_liban zip/解压目录等,仅供移植参考)与临时产物
+/external/
+

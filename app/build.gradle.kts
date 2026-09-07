@@ -88,7 +88,8 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // 协程
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2") // MLKit Task.await
 
     // Ktor 客户端
     implementation("io.ktor:ktor-client-core:2.3.12")
@@ -107,10 +108,17 @@ dependencies {
 
     // 测试依赖
     testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+
+    // ===== 识屏智能体（移植自 sult_liban，MIT）：MediaProjection + MLKit OCR + 技能决策 + 比价 =====
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }
 
 // ===== 编码护栏（2026-09-06 GBK 误回写事故的防再犯闸门）=====
