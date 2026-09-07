@@ -41,6 +41,13 @@ object AccessibilityEventRepository {
     /** 控制消息前缀：让无障碍服务 dump 当前窗口 text/desc/bounds 到 logcat（替代易坏的 uiautomator） */
     const val PREFIX_DUMP_SCREEN = "[DUMP_SCREEN]"
 
+    /** 控制消息前缀：无障碍自带截图(API30+)测试/OCR 用 */
+    const val PREFIX_A11Y_SHOT = "[A11Y_SHOT]"
+
+    fun postA11yShotRequest() {
+        _events.tryEmit(PREFIX_A11Y_SHOT)
+    }
+
     // ---------- 消费记录流（强类型） ----------
     private val _records = MutableSharedFlow<ConsumptionRecord>(extraBufferCapacity = 64)
     val records: SharedFlow<ConsumptionRecord> = _records.asSharedFlow()

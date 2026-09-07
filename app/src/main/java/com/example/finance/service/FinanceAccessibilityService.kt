@@ -150,6 +150,51 @@ class FinanceAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** 无障碍自带截图（API 30+，无需录屏授权）可行性测试：截图存 a11y_shot.png */
+    private fun debugA11yScreenshot() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            Log.d(TAG, "📸 A11yShot 需要 Android 11+")
+            return
+        }
+        try {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                ContextCompat.getMainExecutor(this),
+                object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                        try {
+                            val buffer = screenshot.hardwareBuffer
+                            val bmp = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                            if (bmp == null) {
+                                Log.e(TAG, "📸 A11yShot wrap null")
+                                return
+                            }
+                            Log.d(TAG, "📸 A11yShot OK ${bmp.width}x${bmp.height}")
+                            runCatching {
+                                val dir = getExternalFilesDir(null) ?: filesDir
+                                val f = java.io.File(dir, "a11y_shot.png")
+                                java.io.FileOutputStream(f).use {
+                                    bmp.compress(Bitmap.CompressFormat.PNG, 90, it)
+                                }
+                                Log.d(TAG, "📸 A11yShot saved ${f.absolutePath}")
+                            }
+                            bmp.recycle()
+                            buffer.close()
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "📸 A11yShot 处理失败: ${t.message}")
+                        }
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        Log.e(TAG, "📸 A11yShot FAIL code=$errorCode")
+                    }
+                },
+            )
+        } catch (t: Throwable) {
+            Log.e(TAG, "📸 A11yShot 异常: ${t.message}")
+        }
+    }
+
     private fun startWindowHealthProbe() {        val h = android.os.Handler(android.os.Looper.getMainLooper())
         val runnable = object : Runnable {
             override fun run() {
@@ -216,6 +261,11 @@ class FinanceAccessibilityService : AccessibilityService() {
                     event == AccessibilityEventRepository.PREFIX_DUMP_SCREEN -> {
                         Log.d(TAG, "🖼 收到 dump 屏幕指令")
                         dumpActiveScreen()
+                    }
+
+                    event == AccessibilityEventRepository.PREFIX_A11Y_SHOT -> {
+                        Log.d(TAG, "📸 收到无障碍截图指令")
+                        debugA11yScreenshot()
                     }
                 }
             }

@@ -224,6 +224,11 @@ class DebugReceiver : BroadcastReceiver() {
                 Log.d(TAG, "TEST_ISLAND 已触发（顶部胶囊滑入）")
             }
 
+            ACTION_A11Y_SHOT -> {
+                com.example.finance.data.AccessibilityEventRepository.postA11yShotRequest()
+                Log.d(TAG, "TEST_A11Y_SHOT 已请求（无障碍截图可行性）")
+            }
+
             ACTION_CONFIGURE -> {
                 val key = intent.getStringExtra("apiKey").orEmpty()
                 val model = intent.getStringExtra("model").orEmpty()
@@ -263,5 +268,6 @@ class DebugReceiver : BroadcastReceiver() {
         const val ACTION_AGENT_TEST = "com.example.finance.TEST_AGENT_TEST"
         const val ACTION_AGENT_RECORD = "com.example.finance.TEST_AGENT_RECORD"
         const val ACTION_ISLAND_TEST = "com.example.finance.TEST_ISLAND"
+        const val ACTION_A11Y_SHOT = "com.example.finance.TEST_A11Y_SHOT"
     }
 }
