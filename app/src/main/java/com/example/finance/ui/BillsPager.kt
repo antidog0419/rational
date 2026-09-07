@@ -18,7 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
-private val PAGE_HEIGHT = 398.dp
+private val PAGE_HEIGHT = 420.dp
 
 @Composable
 fun RecordPager(
@@ -31,9 +31,9 @@ fun RecordPager(
     catShare: List<Pair<String, Double>>,
     monthTotal: Double,
 ) {
-    val pagerState = rememberPagerState(initialPage = 0) { 3 } // 0=日历(默认)
+    val pagerState = rememberPagerState(initialPage = 0) { 2 } // 0=日历(默认)，1=趋势+分类
     val scope = rememberCoroutineScope()
-    val pages = listOf("📅 日历", "📈 趋势", "🍩 分类")
+    val pages = listOf("📅 日历", "📈 趋势 + 分类")
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // 分段标题（点击跳页）；有选中日时提供"返回整月"
@@ -60,12 +60,17 @@ fun RecordPager(
             modifier = Modifier.fillMaxWidth().height(PAGE_HEIGHT),
             key = { it },
         ) { page ->
-            // 短页垂直居中，避免三页高度不一致导致跳动
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 when (page) {
                     0 -> CalendarCard(monthSel, dayTotals, selectedDay, onSelectDay)
-                    1 -> TrendChartCard(trendPoints)
-                    else -> CatShareCard(catShare, monthTotal)
+                    // 1: 趋势与分类上下各半
+                    else -> Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TrendChartCard(modifier = Modifier.weight(1f), points = trendPoints)
+                        CatShareCard(modifier = Modifier.weight(1f), share = catShare, monthTotal = monthTotal)
+                    }
                 }
             }
         }

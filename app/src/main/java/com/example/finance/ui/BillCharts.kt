@@ -61,9 +61,9 @@ fun computeCatShare(monthRows: List<BillEntity>): List<Pair<String, Double>> =
         .sortedByDescending { it.second }
 
 @Composable
-fun TrendChartCard(points: List<TrendPoint>) {
+fun TrendChartCard(modifier: Modifier = Modifier, points: List<TrendPoint>) {
     val peak = points.maxOfOrNull { it.sum } ?: 0.0
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("📈 近 6 月支出趋势", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
@@ -121,9 +121,9 @@ fun TrendChartCard(points: List<TrendPoint>) {
 }
 
 @Composable
-fun CatShareCard(share: List<Pair<String, Double>>, monthTotal: Double) {
+fun CatShareCard(modifier: Modifier = Modifier, share: List<Pair<String, Double>>, monthTotal: Double) {
     val total = monthTotal.coerceAtLeast(0.0)
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(modifier = Modifier.size(118.dp), contentAlignment = Alignment.Center) {
