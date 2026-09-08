@@ -34,3 +34,10 @@ taobao_home_dump.txt
 
 # 外部素材(sult_liban zip/解压目录等,仅供移植参考)与临时产物
 /external/
+
+# liban UI 重构参考素材(zip/解压目录/设计稿)与临时验证产物,不入库
+/liban-main.zip
+/liban-main/
+/rational-ui-components.html
+/verify/
+/tools/ui-backup-*/

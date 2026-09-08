@@ -52,3 +52,50 @@ val RationalBlueTertiary80 = Color(0xFFFFCE9C)
 val RationalBlueBgDark = Color(0xFF0F1416)
 val RationalBlueSurfaceDark = Color(0xFF16191D)
 val RationalBlueOutlineDark = Color(0xFF8C9198)
+
+// ============ 理性 Rational 设计稿 · 薄荷绿体系 (rational-ui-components.html, 2026-09-07) ============
+// 主色
+val RationalMint40 = Color(0xFF3BB89E)   // 主色深(按钮/进度条/激活态文字)
+val RationalMint50 = Color(0xFF5ECDB5)   // 主色(环形/渐变亮部/徽章)
+val RationalMintContainer = Color(0xFFE6F7F3)  // 主色浅底(卡片/图标底)
+val OnRationalMintContainer = Color(0xFF0C3B2F)
+val RationalMintRing = Color(0xFFD9F1EA) // 环形轨道
+val RationalMintBorder = Color(0xFFD3F0E8)
+// 辅助蓝
+val RationalSky40 = Color(0xFF4A90D9)
+val RationalSkyContainer = Color(0xFFEAF2FC)
+val OnRationalSkyContainer = Color(0xFF16375C)
+// 语义色
+val RationalDanger40 = Color(0xFFE85D5D)
+val RationalDangerContainer = Color(0xFFFDEEEE)
+val RationalOnDanger = Color(0xFF8C3A3A)
+val RationalSuccess40 = Color(0xFF48BB78)
+val RationalSuccessContainer = Color(0xFFE9F9F0)
+val RationalOnSuccess = Color(0xFF1E6B46)
+val RationalWarning40 = Color(0xFFF6AD55)
+val RationalWarningContainer = Color(0xFFFFF3E8)
+val RationalOnWarning = Color(0xFF8A5A1E)
+val RationalPurple40 = Color(0xFF805AD5)
+val RationalPurpleContainer = Color(0xFFF3EDFF)
+// 中性色
+val RationalBg = Color(0xFFF5F7FA)          // 页面背景
+val RationalCard = Color(0xFFFFFFFF)        // 卡片
+val RationalText = Color(0xFF1A1A2E)        // 主文字
+val RationalText2 = Color(0xFF718096)       // 次级文字
+val RationalText3 = Color(0xFFA0AEC0)       // 弱文字
+val RationalBorder = Color(0xFFE2E8F0)      // 分隔线/描边
+// 深色(薄荷绿暗色)
+val RationalMintDarkPrimary = Color(0xFF8CE0C6)
+val RationalMintDarkOnPrimary = Color(0xFF0B3B2F)
+val RationalMintDarkContainer = Color(0xFF0E5342)
+val RationalMintDarkOnContainer = Color(0xFFC9F5E6)
+val RationalSkyDark = Color(0xFF8CC7F0)
+val RationalSkyDarkContainer = Color(0xFF0F3A5E)
+val RationalSkyDarkOnContainer = Color(0xFFD2E9FF)
+val RationalDangerDark = Color(0xFFFFB4AB)
+val RationalBgDark = Color(0xFF101513)
+val RationalCardDark = Color(0xFF1A211D)
+val RationalTextDark = Color(0xFFE3E9E4)
+val RationalText2Dark = Color(0xFFAEB8B1)
+val RationalText3Dark = Color(0xFF79857E)
+val RationalBorderDark = Color(0xFF2A332D)

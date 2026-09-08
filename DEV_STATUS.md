@@ -2,6 +2,20 @@
 
 ---
 
+## 【2026-09-07 21:40】UI 按 rational-ui-components.html 全面换肤(薄荷绿体系)+ 首页屏1 高保真(已装机验证)
+
+> 用设计稿 `rational-ui-components.html`(理性 Rational·薄荷绿 #5ECDB5 体系)重构 App UI。改动前已备份:
+> git 分支 `backup/ui-before-rational-mint-20260907-213633` + 物理副本 `tools/ui-backup-before-mint-20260907-213633/`。
+
+- **主题令牌**:`ui/theme/Color.kt` 新增 RationalMint* 全套薄荷绿(主色 #3BB89E/#5ECDB5、浅底 #E6F7F3、辅助蓝 #4A90D9、语义 危险/成功/警告/紫 + 深浅两套中性色);`Theme.kt` 默认浅/深方案由蓝版切到薄荷绿,圆角 8/12/16/24 体系;`Type.kt` 字重/字号向设计稿对齐。
+- **图标**:把 HTML 内联 SVG 的 20 个线性图标转成 VectorDrawable(`res/drawable/ic_*.xml`, 首页/铃铛/书/用户/机器人/脑/图表/购物车/游戏/餐饮/影视/皇冠/金币/天平/时钟/勾/火花 等),替换底部导航 emoji 与关键入口。
+- **首页屏1 高保真**(`ui/RationalHome.kt`):问候头部(铃铛红点+渐变头像)→ 理性指数卡(环形仪表+「超过 x% 的同龄人」)+ 双统计卡(本月已支出/预算剩余)→ 三个快捷入口(实时预警=屏2 / 智能诊断 / 消费报告)→ 「AI 干预记录」风格最近消费列表;全部数据仍读 Room+BudgetStore。
+- **骨架换肤**(`ui/HomeScreen.kt`):首页去掉顶栏、其余页轻量标题栏;底部导航改为 白底+透明指示器+薄荷深色激活态(线形图标);「我的」页新增 会员订阅 / 理性成长社区 两个视觉占位入口(点击 Toast「敬请期待」)。
+- **真机验证**:安装 Finance-debug.apk 无崩溃;uiautomator 文本抽样确认 首页全卡/记录/我的/屏2 干预弹窗均正常,占位卡可见。截图 `verify/home-mint-final.png`。
+- **备注**:屏5/屏6(会员/社区)无对应真实功能,按纯视觉占位处理;悬浮窗/识屏等非 Compose 窗口仍为旧配色(待后续)。
+
+---
+
 ## 【2026-09-07 19:00】sult_liban 识屏智能体整合(feat/sult-integration 分支,待人工走查后定合并)
 
 > 仓库: [KnightKanox/sult_liban](https://github.com/KnightKanox/sult_liban)(MIT) — 另一版"理伴"比赛实现:MediaProjection+MLKit OCR+技能决策+智谱比价。按用户决策以**方案① 能力整合**移植为"第二条感知通道 + 决策大脑",UI 保持蓝版理伴。

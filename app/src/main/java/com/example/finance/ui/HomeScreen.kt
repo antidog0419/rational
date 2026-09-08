@@ -9,11 +9,13 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,13 +24,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.finance.BuildConfig
+import com.example.finance.R
 import com.example.finance.ai.AIAdvice
 import com.example.finance.ai.AIService
 import com.example.finance.data.AccessibilityEventRepository
@@ -164,39 +170,96 @@ fun HomeScreen() {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("理伴", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+            // 首页无顶部标题栏（问候头部自带，贴近设计稿 屏1）；其余页保留轻量标题栏
+            if (selectedTab != 0) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            when (selectedTab) {
+                                1 -> "账单记录"
+                                2 -> "AI 咨询中心"
+                                else -> "我的"
+                            },
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground
+                    )
                 )
-            )
+            }
         },
         bottomBar = {
-            NavigationBar {
+            val mintDeep = MaterialTheme.colorScheme.primary
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp
+            ) {
+                // 设计稿导航：线形图标 + 文字；激活态主色（薄荷深）
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    icon = { Text("🏠") },
-                    label = { Text("首页") }
+                    icon = {
+                        Icon(painterResource(R.drawable.ic_home), contentDescription = null,
+                            modifier = Modifier.size(22.dp))
+                    },
+                    label = { Text("首页") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = mintDeep,
+                        selectedTextColor = mintDeep,
+                        indicatorColor = Color.Transparent,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    icon = { Text("📋") },
-                    label = { Text("记录") }
+                    icon = {
+                        Icon(painterResource(R.drawable.ic_book), contentDescription = null,
+                            modifier = Modifier.size(22.dp))
+                    },
+                    label = { Text("记录") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = mintDeep,
+                        selectedTextColor = mintDeep,
+                        indicatorColor = Color.Transparent,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    icon = { Text("💬") },
-                    label = { Text("咨询") }
+                    icon = {
+                        Icon(painterResource(R.drawable.ic_msg), contentDescription = null,
+                            modifier = Modifier.size(22.dp))
+                    },
+                    label = { Text("咨询") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = mintDeep,
+                        selectedTextColor = mintDeep,
+                        indicatorColor = Color.Transparent,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
-                    icon = { Text("👤") },
-                    label = { Text("我的") }
+                    icon = {
+                        Icon(painterResource(R.drawable.ic_user), contentDescription = null,
+                            modifier = Modifier.size(22.dp))
+                    },
+                    label = { Text("我的") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = mintDeep,
+                        selectedTextColor = mintDeep,
+                        indicatorColor = Color.Transparent,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
             }
         },
@@ -1087,6 +1150,29 @@ private fun MineTabColumn(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
 
+        // 更多产品：会员订阅 / 理性成长社区（纯视觉占位入口）
+        SectionTitle("更多功能")
+        PlaceholderEntryCard(
+            iconRes = R.drawable.ic_crown,
+            tint = com.example.finance.ui.theme.RationalWarning40,
+            tileBg = com.example.finance.ui.theme.RationalWarningContainer,
+            title = "会员订阅 · 升级「认知版」",
+            desc = "解锁完整 AI 消费分析能力",
+            onTap = {
+                android.widget.Toast.makeText(mineCtx, "会员订阅 · 敬请期待", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        )
+        PlaceholderEntryCard(
+            iconRes = R.drawable.ic_users,
+            tint = com.example.finance.ui.theme.RationalPurple40,
+            tileBg = com.example.finance.ui.theme.RationalPurpleContainer,
+            title = "理性成长社区",
+            desc = "21 天理性消费挑战 · 同龄人都在聊",
+            onTap = {
+                android.widget.Toast.makeText(mineCtx, "理性成长社区 · 敬请期待", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        )
+
         // 开发者
         Text("理伴 v${BuildConfig.VERSION_NAME} · 仅供演示",
             style = MaterialTheme.typography.labelSmall,
@@ -1203,6 +1289,53 @@ private fun A11yDiagnoseCard(a11yEnabled: Boolean, onOpenA11y: () -> Unit) {
                     cm.setPrimaryClip(android.content.ClipData.newPlainText("诊断", diag))
                     android.widget.Toast.makeText(context, "诊断已复制，可直接粘贴发给开发者", android.widget.Toast.LENGTH_SHORT).show()
                 }, modifier = Modifier.weight(1f)) { Text("复制诊断") }
+            }
+        }
+    }
+}
+
+/** 「更多功能」占位入口卡：会员订阅 / 社区（点击提示敬请期待） */
+@Composable
+private fun PlaceholderEntryCard(
+    iconRes: Int,
+    tint: Color,
+    tileBg: Color,
+    title: String,
+    desc: String,
+    onTap: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onTap),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(tileBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(painterResource(iconRes), contentDescription = title, tint = tint,
+                    modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(desc, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(999.dp)) {
+                Text("敬请期待", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
