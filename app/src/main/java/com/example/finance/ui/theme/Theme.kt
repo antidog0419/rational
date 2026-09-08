@@ -1,79 +1,22 @@
 package com.example.finance.ui.theme
 
 import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
 
-// ===== 理性 Rational · 薄荷绿设计稿浅色方案 (rational-ui-components.html) =====
-private val MintLightColorScheme = lightColorScheme(
-    primary = RationalMint40,
-    onPrimary = Color.White,
-    primaryContainer = RationalMintContainer,
-    onPrimaryContainer = OnRationalMintContainer,
-    secondary = RationalSky40,
-    onSecondary = Color.White,
-    secondaryContainer = RationalSkyContainer,
-    onSecondaryContainer = OnRationalSkyContainer,
-    tertiary = Color(0xFFB26A00),            // 强调：琥珀金
-    onTertiary = Color.White,
-    tertiaryContainer = RationalWarningContainer,
-    onTertiaryContainer = RationalOnWarning,
-    background = RationalBg,
-    onBackground = RationalText,
-    surface = RationalCard,
-    onSurface = RationalText,
-    surfaceVariant = Color(0xFFEDF1F6),
-    onSurfaceVariant = RationalText2,
-    outline = RationalText3,
-    outlineVariant = RationalBorder,
-    error = RationalDanger40,
-    onError = Color.White,
-    errorContainer = RationalDangerContainer,
-    onErrorContainer = RationalOnDanger
-)
+// ===== liban-main 移植：全局统一使用 LibanColors（青绿 #27BD9F 体系），见 LibanTokens.kt =====
+// liban 为浅色设计稿，故固定 light scheme，不随系统明暗切换；仅同步状态栏/导航栏配色。
 
-// ===== 薄荷绿深色方案 =====
-private val MintDarkColorScheme = darkColorScheme(
-    primary = RationalMintDarkPrimary,
-    onPrimary = RationalMintDarkOnPrimary,
-    primaryContainer = RationalMintDarkContainer,
-    onPrimaryContainer = RationalMintDarkOnContainer,
-    secondary = RationalSkyDark,
-    onSecondary = Color(0xFF0B2C45),
-    secondaryContainer = RationalSkyDarkContainer,
-    onSecondaryContainer = RationalSkyDarkOnContainer,
-    tertiary = Color(0xFFFFC663),
-    onTertiary = Color(0xFF3D2600),
-    tertiaryContainer = Color(0xFF4A3A00),
-    onTertiaryContainer = Color(0xFFFFDDB1),
-    background = RationalBgDark,
-    onBackground = RationalTextDark,
-    surface = RationalCardDark,
-    onSurface = RationalTextDark,
-    surfaceVariant = Color(0xFF232C27),
-    onSurfaceVariant = RationalText2Dark,
-    outline = RationalText3Dark,
-    outlineVariant = RationalBorderDark,
-    error = RationalDangerDark,
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6)
-)
-
-// 圆角体系：参照设计稿 sm 8 / md 12 / lg 16 / xl 24
-private val MintShapes = Shapes(
+// 圆角体系（与既有 8/12/16/24 档近似；liban 组件多以 Radius.* 内联，见 LibanTokens.kt）
+private val FinanceShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
     small = RoundedCornerShape(8.dp),
     medium = RoundedCornerShape(12.dp),
@@ -83,40 +26,46 @@ private val MintShapes = Shapes(
 
 @Composable
 fun FinanceTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // 动态取色默认关闭：保持"理性·薄荷绿"品牌观感（需要系统动态色可传 true）
-    dynamicColor: Boolean = false,
+    // 兼容旧签名保留参数；liban 换肤为浅色体系，不随系统明暗切换
+    @Suppress("UNUSED_PARAMETER") darkTheme: Boolean = false,
+    // 动态取色关闭：保持 liban 品牌观感
+    @Suppress("UNUSED_PARAMETER") dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (darkTheme) {
-                androidx.compose.material3.dynamicDarkColorScheme(context)
-            } else {
-                androidx.compose.material3.dynamicLightColorScheme(context)
-            }
-        }
+    val c = LibanColors()
 
-        darkTheme -> MintDarkColorScheme
-        else -> MintLightColorScheme
-    }
-
-    // 让系统状态栏/导航栏贴合主题
+    // 让系统状态栏/导航栏贴合主题背景（浅色背景 → 深色系统图标）
     (context as? Activity)?.let { act ->
         val window = act.window
         WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = !darkTheme
-            isAppearanceLightNavigationBars = !darkTheme
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
         }
-        window.statusBarColor = colorScheme.background.toArgb()
-        window.navigationBarColor = colorScheme.background.toArgb()
+        window.statusBarColor = c.background.toArgb()
+        window.navigationBarColor = c.background.toArgb()
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = MintShapes,
-        content = content
-    )
+    CompositionLocalProvider(LocalLibanColors provides c) {
+        MaterialTheme(
+            colorScheme = lightColorScheme(
+                primary = c.primary,
+                onPrimary = c.onPrimary,
+                primaryContainer = c.primaryContainer,
+                onPrimaryContainer = c.textPrimary,
+                secondary = c.primaryDeep,
+                background = c.background,
+                onBackground = c.textPrimary,
+                surface = c.surface,
+                onSurface = c.textPrimary,
+                surfaceVariant = c.primaryContainer,
+                onSurfaceVariant = c.textSecondary,
+                error = c.danger,
+                outline = c.outline,
+            ),
+            typography = Typography,
+            shapes = FinanceShapes,
+            content = content
+        )
+    }
 }

@@ -92,7 +92,8 @@ fun BillsTabColumn(
     a11yEnabled: Boolean,
     onFetchAlipay: () -> Unit,
     onFetchMeituan: () -> Unit,
-    onFetchTaobao: () -> Unit
+    onFetchTaobao: () -> Unit,
+    footer: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val dao = remember { FinanceDb.get(context).billDao() }
@@ -383,6 +384,13 @@ fun BillsTabColumn(
                             modifier = Modifier.padding(vertical = 1.dp))
                     }
                 }
+            }
+        }
+
+        // ---------- 记录页页尾:识屏决策 + AI 建议(liban 首页区) ----------
+        if (footer != null) {
+            item(key = "liban-footer") {
+                footer()
             }
         }
     }

@@ -53,8 +53,42 @@ import com.example.finance.utils.AppLauncher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
+import com.example.finance.agent.AgentGraph
+import com.example.finance.ui.components.BottomBarItem
+import com.example.finance.ui.components.InterventionSheet
+import com.example.finance.ui.components.LibanBottomBar
+import com.example.finance.ui.components.PageHeader
+import com.example.finance.ui.components.SectionCard
+import com.example.finance.ui.mock.InterventionDetail
+import com.example.finance.ui.mock.InterventionRow
+import com.example.finance.ui.screens.CommunityScreen
+import com.example.finance.ui.screens.DataPrivacyScreen
+import com.example.finance.ui.screens.ExplainabilityScreen
+import com.example.finance.ui.screens.MembershipScreen
+import com.example.finance.ui.screens.ProfileScreen
+import com.example.finance.ui.screens.BudgetRealScreen
+import com.example.finance.ui.screens.GoalRealScreen
+import com.example.finance.ui.theme.Spacing
+import com.example.finance.ui.theme.libanColors
+import com.example.finance.data.monthRange
+
+/** liban 二级页(全屏覆盖底栏) */
+private enum class LibanStackPage { EXPLAINABILITY, DATA_PRIVACY, MEMBERSHIP, BUDGET, GOAL, SETTINGS, CONSULT }
+
+/** 底部 5 Tab(索引与 LibanBottomBar 一致:2 为中央 + 按钮) */
+private enum class MainTab(val label: String) {
+    HOME("首页"), COMMUNITY("社区"), CENTER("+"), RECORD("记录"), MINE("我的")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -168,110 +202,88 @@ fun HomeScreen() {
         }
     }
 
-    Scaffold(
-        topBar = {
-            // 首页无顶部标题栏（问候头部自带，贴近设计稿 屏1）；其余页保留轻量标题栏
-            if (selectedTab != 0) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            when (selectedTab) {
-                                1 -> "账单记录"
-                                2 -> "AI 咨询中心"
-                                else -> "我的"
-                            },
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground
-                    )
-                )
-            }
-        },
-        bottomBar = {
-            val mintDeep = MaterialTheme.colorScheme.primary
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp
-            ) {
-                // 设计稿导航：线形图标 + 文字；激活态主色（薄荷深）
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = {
-                        Icon(painterResource(R.drawable.ic_home), contentDescription = null,
-                            modifier = Modifier.size(22.dp))
-                    },
-                    label = { Text("首页") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = mintDeep,
-                        selectedTextColor = mintDeep,
-                        indicatorColor = Color.Transparent,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = {
-                        Icon(painterResource(R.drawable.ic_book), contentDescription = null,
-                            modifier = Modifier.size(22.dp))
-                    },
-                    label = { Text("记录") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = mintDeep,
-                        selectedTextColor = mintDeep,
-                        indicatorColor = Color.Transparent,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = {
-                        Icon(painterResource(R.drawable.ic_msg), contentDescription = null,
-                            modifier = Modifier.size(22.dp))
-                    },
-                    label = { Text("咨询") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = mintDeep,
-                        selectedTextColor = mintDeep,
-                        indicatorColor = Color.Transparent,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    icon = {
-                        Icon(painterResource(R.drawable.ic_user), contentDescription = null,
-                            modifier = Modifier.size(22.dp))
-                    },
-                    label = { Text("我的") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = mintDeep,
-                        selectedTextColor = mintDeep,
-                        indicatorColor = Color.Transparent,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-            }
-        },
-        content = { padding ->
-            when (selectedTab) {
-                0 -> RationalHomeTab(
-                    padding,
-                    onDiagnose = ::generateWeekly,
-                    onReport = ::generateWeekly
-                )
+    // ================= liban 5-Tab 外壳（移植 liban-main ui） =================
+    // 布局：首页 / 社区 / +(中央,拦截为支付干预弹窗) / 记录 / 我的
+    //   · 首页 = RationalHomeTab（真实数据仪表盘：金额/理性指数/预算全读 FinanceDb+BudgetStore）
+    //   · 社区 = liban CommunityScreen（演示数据）
+    //   · 记录 = BillsTabColumn（真实账单区：抓取×3/手动补记/编辑/删除/去重提示）+ 页尾识屏决策&AIA建议
+    //   · 我的 = liban ProfileScreen 行入口 → 真实二级页（预算/储蓄目标/系统设置/识屏助手/数据权限/会员）
+    val c = libanColors()
+    var stackPage by remember { mutableStateOf<LibanStackPage?>(null) }
+    var showSheet by remember { mutableStateOf(false) }
+    BackHandler(enabled = stackPage != null) { stackPage = null }
 
-                1 -> BillsTabColumn(padding, logs, a11yEnabled,
+    // 记录页页尾真实数据（识屏决策来自 agent.db；AI 建议来自 adviceFlow 会话列表）
+    val agentDecisions by AgentGraph.repository.decisions.collectAsState(initial = emptyList())
+    val footerForBills: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            if (aiAdvice.isNotEmpty()) {
+                SectionCard(title = "💡 AI 建议历史") {
+                    aiAdvice.take(5).forEach { a ->
+                        Row(Modifier.padding(vertical = Spacing.xs), verticalAlignment = Alignment.Top) {
+                            Text("•", style = MaterialTheme.typography.bodySmall, color = libanColors().textTertiary)
+                            Text(a.advice,
+                                Modifier.padding(start = Spacing.xs).weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = libanColors().textPrimary)
+                            Text(a.source, style = MaterialTheme.typography.labelSmall,
+                                color = if (a.source == AIAdvice.CLOUD_SOURCE) libanColors().primaryDeep else libanColors().textTertiary)
+                        }
+                    }
+                }
+            }
+            if (agentDecisions.isNotEmpty()) {
+                SectionCard(title = "🧭 识屏决策历史", actionText = "去识屏助手", onAction = { stackPage = LibanStackPage.CONSULT }) {
+                    agentDecisions.take(6).forEach { d ->
+                        Row(Modifier.padding(vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                            Text("🛍️", style = MaterialTheme.typography.titleSmall)
+                            Column(Modifier.weight(1f).padding(start = Spacing.s)) {
+                                Text("${d.productName}  ¥${d.priceCents / 100.0}",
+                                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("${d.recommendation} · ${d.riskLevel} · ${date(d.createdAt)}",
+                                    style = MaterialTheme.typography.labelSmall, color = libanColors().textSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+            if (aiAdvice.isEmpty() && agentDecisions.isEmpty()) {
+                Text("暂无识屏决策与 AI 建议：消费/抓取账单或去「识屏助手」分析后会出现。",
+                    style = MaterialTheme.typography.labelSmall, color = libanColors().textSecondary)
+            }
+        }
+    }
+
+    Scaffold(
+        containerColor = c.background,
+        bottomBar = {
+            if (stackPage == null) {
+                LibanBottomBar(
+                    items = listOf(
+                        BottomBarItem(MainTab.HOME.label, Icons.Default.Home),
+                        BottomBarItem(MainTab.COMMUNITY.label, Icons.Default.Face),
+                        BottomBarItem(MainTab.CENTER.label, Icons.Default.Add, isCenter = true),
+                        BottomBarItem(MainTab.RECORD.label, Icons.Default.List),
+                        BottomBarItem(MainTab.MINE.label, Icons.Default.Person),
+                    ),
+                    selectedIndex = selectedTab,
+                    onSelect = { index ->
+                        if (index == MainTab.CENTER.ordinal) {
+                            showSheet = true          // 中央 +：支付干预弹窗（真实预算口径）
+                        } else {
+                            selectedTab = index
+                        }
+                    },
+                )
+            }
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            when (selectedTab) {
+                MainTab.HOME.ordinal -> RationalHomeTab(padding, onDiagnose = ::generateWeekly, onReport = ::generateWeekly)
+                MainTab.COMMUNITY.ordinal -> CommunityScreen()
+                MainTab.RECORD.ordinal -> BillsTabColumn(
+                    padding, logs, a11yEnabled,
                     onFetchAlipay = {
                         settings.pendingBillFetch = false
                         AccessibilityEventRepository.postAlipayBillFetchRequest()
@@ -284,393 +296,183 @@ fun HomeScreen() {
                     onFetchTaobao = {
                         AccessibilityEventRepository.postTaobaoBillFetchRequest()
                         logs.add(0, "📋 已请求：自动打开淘宝闪购 → 尝试进入订单/账单页并翻页抓取")
-                    }
+                    },
+                    footer = footerForBills,
                 )
-
-                2 -> ConsultTab(
-                    padding, aiAdvice, currentNeeds, isRecommendLoading, isWeeklyLoading,
-                    a11yEnabled, autoExecute, topPicks, merchantCount,
-                    onNeedsChange = { currentNeeds = it },
-                    onGenerateWeekly = ::generateWeekly,
-                    onRecommendTop3 = {
-                        isRecommendLoading = true
-                        CoroutineScope(Dispatchers.IO).launch {
-                            try {
-                                // 候选 = 本地商家库高频店家（账单抓取时已积累）
-                                val candidates = MerchantStore.topCandidates(20)
-                                val picks = if (candidates.isEmpty()) {
-                                    listOf(DemoProfile.favoriteRestaurants.firstOrNull().orEmpty())
-                                        .filter { it.isNotBlank() }
-                                } else {
-                                    AIService.recommendTop3(currentNeeds, candidates)
-                                        .ifEmpty { candidates.take(3) }
-                                }
-                                withContext(Dispatchers.Main) {
-                                    topPicks = picks
-                                    if (autoExecute && picks.isNotEmpty()) executePicked(picks.first())
-                                }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    logs.add(0, "❌ AI 推荐失败: ${e.message}")
-                                }
-                            } finally {
-                                withContext(Dispatchers.Main) { isRecommendLoading = false }
-                            }
-                        }
-                    },
-                    onPick = ::executePicked
+                MainTab.MINE.ordinal -> ProfileScreen(
+                    onOpenDataPrivacy = { stackPage = LibanStackPage.DATA_PRIVACY },
+                    onOpenMembership = { stackPage = LibanStackPage.MEMBERSHIP },
+                    onOpenBudget = { stackPage = LibanStackPage.BUDGET },
+                    onOpenGoal = { stackPage = LibanStackPage.GOAL },
+                    onOpenSettings = { stackPage = LibanStackPage.SETTINGS },
+                    onOpenConsult = { stackPage = LibanStackPage.CONSULT },
                 )
-
-                else -> MineTabColumn(padding, settings, a11yEnabled, autoExecute, judgeEnabled, apiKeyInput, modelInput, dsStatus,
-                    exportPath = exportPath,
-                    onOpenA11y = {
-                        logs.add(0, "👉 正在打开系统无障碍设置…请开启 Finance 服务后返回")
-                        runCatching { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-                    },
-                    onApiKeyChange = { apiKeyInput = it },
-                    onModelChange = { modelInput = it },
-                    onSaveDeepSeek = {
-                        settings.saveDeepSeek(apiKeyInput, modelInput, "")
-                        ModelAPIClient.updateConfig(apiKeyInput, modelInput, null)
-                        dsStatus = if (ModelAPIClient.isConfigured()) {
-                            "已配置（模型：${modelInput.ifBlank { BuildConfig.DEEPSEEK_MODEL }}）"
-                        } else "未配置"
-                        logs.add(0, if (ModelAPIClient.isConfigured()) {
-                            "⚙️ DeepSeek 已配置，模型：${modelInput.ifBlank { BuildConfig.DEEPSEEK_MODEL }}"
-                        } else "⚠️ API Key 为空：AI 将使用端侧规则")
-                    },
-                    onAutoExecuteChange = {
-                        autoExecute = it
-                        settings.autoExecuteAiSearch = it
-                        logs.add(0, if (it) "⚙️ 已开启自动执行（推荐后直接打开美团）" else "⚙️ 已关闭自动执行（人工确认）")
-                    },
-                    onJudgeEnabledChange = {
-                        judgeEnabled = it
-                        settings.judgeBeforeOrderEnabled = it
-                        logs.add(0, if (it) "⚙️ 已开启下单前判断（结算页守卫）" else "⚙️ 已关闭下单前判断")
-                    },
-                    onClearAll = {
-                        // 清空"本机积累"：商家库 + 会话日志/建议（账单库走下方独立按钮）
-                        MerchantStore.clear()
-                        merchantCount = 0
-                        aiAdvice.clear()
-                        logs.clear()
-                        logs.add(0, "🧹 已清空本机记录（商家库 / 日志 / 建议）")
-                    },
-                    onExport = {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            val db = FinanceDb.get(context)
-                            val rows = db.billDao().all()
-                            val path = writeBillsCsv(context, rows)
-                            withContext(Dispatchers.Main) {
-                                exportPath = path
-                                logs.add(0, "📤 已导出账单 CSV：$path")
-                            }
-                        }
-                    },
-                    onClearDb = {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            FinanceDb.get(context).billDao().clearAll()
-                            withContext(Dispatchers.Main) {
-                                logs.add(0, "🗑️ 已清空本地账单库")
-                            }
-                        }
-                    },
-                    onCleanSource = { src ->
-                        CoroutineScope(Dispatchers.IO).launch {
-                            FinanceDb.get(context).billDao().deleteBySource(src)
-                            withContext(Dispatchers.Main) {
-                                logs.add(0, "🧹 已清空来源=「$src」的全部账单")
-                            }
-                        }
-                    }
-                )
+                else -> Unit // CENTER 不可达：中央按钮被拦截为弹窗
             }
         }
-    )
-}
-
-// ============ 首页 Tab ============
-@Composable
-private fun HomeTabColumn(
-    padding: androidx.compose.foundation.layout.PaddingValues,
-    aiAdvice: SnapshotStateList<AIAdvice>,
-    currentNeeds: String,
-    isRecommendLoading: Boolean,
-    isWeeklyLoading: Boolean,
-    a11yEnabled: Boolean,
-    autoExecute: Boolean,
-    topPicks: List<String>,
-    merchantCount: Int,
-    onNeedsChange: (String) -> Unit,
-    onGenerateWeekly: () -> Unit,
-    onRecommendTop3: () -> Unit,
-    onPick: (String) -> Unit
-) {
-    // 首页卡片直接读本地账单库：今日支出/今日笔数/最近一笔与账单页同一份数据，随入库自动刷新
-    val context = LocalContext.current
-    val dao = remember { FinanceDb.get(context).billDao() }
-    val (tFrom, tTo) = remember { todayRange() }
-    val todaySum by dao.sumBetween(tFrom, tTo).collectAsState(initial = 0.0)
-    val todayCount by dao.countBetween(tFrom, tTo).collectAsState(initial = 0)
-    val latest by dao.latestFew().collectAsState(initial = emptyList())
-    val recent = latest.firstOrNull()
-
-    // 月度浏览：月份切换看历史月（支出合计/笔数/日均）
-    var monthSel by remember { mutableIntStateOf(currentMonthEncoded()) }
-    val (mf, mt) = remember(monthSel) { monthRangeOfEnc(monthSel) }
-    val monthSum by remember(monthSel) { dao.sumBetween(mf, mt) }.collectAsState(initial = 0.0)
-    val monthCnt by remember(monthSel) { dao.countBetween(mf, mt) }.collectAsState(initial = 0)
-    val monthDays = monthElapsedDays(monthSel)
-    val monthAvg = if (monthDays > 0) monthSum / monthDays else 0.0
-
-    // 本月预算卡（始终看"本月"；预算在「我的 → 预算设置」里改）
-    val allRowsByDao by dao.observeAll().collectAsState(initial = emptyList())
-    val curPrefix = remember { monthDayPrefix(currentMonthEncoded()) }
-    val curMonthRows = remember(allRowsByDao, curPrefix) {
-        allRowsByDao.filter { it.dayBucket.startsWith(curPrefix) }
-    }
-    val curSpent = remember(curMonthRows) { curMonthRows.sumOf { it.amount } }
-    val curCatSpent = remember(curMonthRows) {
-        val m = HashMap<String, Double>()
-        for (r in curMonthRows) {
-            val c = BillCategories.categorize(r.merchant, r.source)
-            m[c] = (m[c] ?: 0.0) + r.amount
-        }
-        m
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(padding)
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // 今日概览（口径：今天 00:00 起的所有支出，来自本地账单库）
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("今日支出", style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text("¥${String.format("%.2f", todaySum)}",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Surface(color = MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.small) {
-                        Text("今日 $todayCount 笔",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimary)
+    // 二级页（全屏覆盖底栏）
+    stackPage?.let { page ->
+        Surface(Modifier.fillMaxSize(), color = c.background) {
+            when (page) {
+                LibanStackPage.EXPLAINABILITY -> ExplainabilityScreen(onBack = { stackPage = null })
+                LibanStackPage.DATA_PRIVACY -> DataPrivacyScreen(onBack = { stackPage = null })
+                LibanStackPage.MEMBERSHIP -> MembershipScreen(onBack = { stackPage = null })
+                LibanStackPage.BUDGET -> BudgetRealScreen(onBack = { stackPage = null })
+                LibanStackPage.GOAL -> GoalRealScreen(onBack = { stackPage = null })
+                LibanStackPage.SETTINGS -> Column(Modifier.fillMaxSize()) {
+                    // 系统与账单设置：沿用原「我的」真实内容（无障碍/DeepSeek/预算/抓取/CSV/清空/来源清理）
+                    PageHeader("系统与账单设置", onBack = { stackPage = null })
+                    Box(Modifier.weight(1f)) {
+                        MineTabColumn(
+                            padding = PaddingValues(0.dp),
+                        settings = settings,
+                        a11yEnabled = a11yEnabled,
+                        autoExecute = autoExecute,
+                        judgeEnabled = judgeEnabled,
+                        apiKeyInput = apiKeyInput,
+                        modelInput = modelInput,
+                        dsStatus = dsStatus,
+                        exportPath = exportPath,
+                        onOpenA11y = {
+                            logs.add(0, "👉 正在打开系统无障碍设置…请开启 Finance 服务后返回")
+                            runCatching { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                        },
+                        onApiKeyChange = { apiKeyInput = it },
+                        onModelChange = { modelInput = it },
+                        onSaveDeepSeek = {
+                            settings.saveDeepSeek(apiKeyInput, modelInput, "")
+                            ModelAPIClient.updateConfig(apiKeyInput, modelInput, null)
+                            dsStatus = if (ModelAPIClient.isConfigured()) {
+                                "已配置（模型：${modelInput.ifBlank { BuildConfig.DEEPSEEK_MODEL }}）"
+                            } else "未配置"
+                            logs.add(0, if (ModelAPIClient.isConfigured()) {
+                                "⚙️ DeepSeek 已配置，模型：${modelInput.ifBlank { BuildConfig.DEEPSEEK_MODEL }}"
+                            } else "⚠️ API Key 为空：AI 将使用端侧规则")
+                        },
+                        onAutoExecuteChange = {
+                            autoExecute = it
+                            settings.autoExecuteAiSearch = it
+                            logs.add(0, if (it) "⚙️ 已开启自动执行（推荐后直接打开美团）" else "⚙️ 已关闭自动执行（人工确认）")
+                        },
+                        onJudgeEnabledChange = {
+                            judgeEnabled = it
+                            settings.judgeBeforeOrderEnabled = it
+                            logs.add(0, if (it) "⚙️ 已开启下单前判断（结算页守卫）" else "⚙️ 已关闭下单前判断")
+                        },
+                        onClearAll = {
+                            MerchantStore.clear()
+                            merchantCount = 0
+                            aiAdvice.clear()
+                            logs.clear()
+                            logs.add(0, "🧹 已清空本机记录（商家库 / 日志 / 建议）")
+                        },
+                        onExport = {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                val db = FinanceDb.get(context)
+                                val rows = db.billDao().all()
+                                val path = writeBillsCsv(context, rows)
+                                withContext(Dispatchers.Main) {
+                                    exportPath = path
+                                    logs.add(0, "📤 已导出账单 CSV：$path")
+                                }
+                            }
+                        },
+                        onClearDb = {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                FinanceDb.get(context).billDao().clearAll()
+                                withContext(Dispatchers.Main) { logs.add(0, "🗑️ 已清空本地账单库") }
+                            }
+                        },
+                        onCleanSource = { src ->
+                            CoroutineScope(Dispatchers.IO).launch {
+                                FinanceDb.get(context).billDao().deleteBySource(src)
+                                withContext(Dispatchers.Main) { logs.add(0, "🧹 已清空来源=「$src」的全部账单") }
+                            }
+                        },
+                    )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    recent?.let { r ->
-                        Text("最近一笔：${r.merchant} · ${r.toRecord().dayPartLabel}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            maxLines = 1)
+                }
+                LibanStackPage.CONSULT -> Column(Modifier.fillMaxSize()) {
+                    // AI 咨询中心（真实：识屏助手/每周小结/Top3 —— 原「咨询 Tab」全部功能）
+                    PageHeader("AI 咨询中心", onBack = { stackPage = null })
+                    Box(Modifier.weight(1f)) {
+                    ConsultTab(
+                        padding = PaddingValues(0.dp),
+                        aiAdvice = aiAdvice,
+                        currentNeeds = currentNeeds,
+                        isRecommendLoading = isRecommendLoading,
+                        isWeeklyLoading = isWeeklyLoading,
+                        a11yEnabled = a11yEnabled,
+                        autoExecute = autoExecute,
+                        topPicks = topPicks,
+                        merchantCount = merchantCount,
+                        onNeedsChange = { currentNeeds = it },
+                        onGenerateWeekly = ::generateWeekly,
+                        onRecommendTop3 = {
+                            isRecommendLoading = true
+                            CoroutineScope(Dispatchers.IO).launch {
+                                try {
+                                    val candidates = MerchantStore.topCandidates(20)
+                                    val picks = if (candidates.isEmpty()) {
+                                        listOf(DemoProfile.favoriteRestaurants.firstOrNull().orEmpty())
+                                            .filter { it.isNotBlank() }
+                                    } else {
+                                        AIService.recommendTop3(currentNeeds, candidates)
+                                            .ifEmpty { candidates.take(3) }
+                                    }
+                                    withContext(Dispatchers.Main) {
+                                        topPicks = picks
+                                        if (autoExecute && picks.isNotEmpty()) executePicked(picks.first())
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) { logs.add(0, "❌ AI 推荐失败: ${e.message}") }
+                                } finally {
+                                    withContext(Dispatchers.Main) { isRecommendLoading = false }
+                                }
+                            }
+                        },
+                        onPick = ::executePicked,
+                    )
                     }
                 }
             }
         }
+    }
 
-        // 本月预算进度（已花 / 剩余 / 日均可用 / 分类小计）
-        val budgetMonthly = BudgetStore.monthlyBudget()
-        val catBudgets = BudgetStore.catBudgets()
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("本月预算", style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary)
-                    Text("¥${"%.2f".format(budgetMonthly)}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold)
-                }
-                LinearProgressIndicator(
-                    progress = {
-                        if (budgetMonthly > 0.0) (curSpent / budgetMonthly).toFloat().coerceIn(0f, 1f) else 0f
-                    },
-                    modifier = Modifier.fillMaxWidth().height(8.dp)
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("已花 ¥${"%.2f".format(curSpent)} · ${curMonthRows.size} 笔",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    val remain = budgetMonthly - curSpent
-                    if (remain >= 0) {
-                        val daysLeft = daysLeftThisMonth()
-                        val perDay = if (daysLeft > 0) remain / daysLeft else 0.0
-                        Text("剩余 ¥${"%.2f".format(remain)} · 日均可用 ¥${"%.2f".format(perDay)}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (remain < budgetMonthly * 0.2) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.primary)
-                    } else {
-                        Text("已超支 ¥${"%.2f".format(-remain)}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.error)
-                    }
-                }
-                val catLine = catBudgets.entries.joinToString(" · ") { (c, b) ->
-                    "$c ¥${"%.0f".format(curCatSpent[c] ?: 0.0)}/¥${"%.0f".format(b)}"
-                }
-                if (catBudgets.isNotEmpty()) {
-                    Text(catLine,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2)
-                }
-                Text("预算与分类在「我的 → 预算设置」调整；AI 点评与悬浮窗提醒会带上剩余预算。",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline)
-            }
-        }
-
-        // 月度浏览：‹ 月份 › 切换，快速看历史月
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                MonthSwitcherRow(monthSel) { monthSel = it }
-            }
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("支出合计", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("¥${"%.2f".format(monthSum)}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary)
-                }
-                Text("${monthLabel(monthSel)}共 $monthCnt 笔 · 日均 ¥${"%.2f".format(monthAvg)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        // AI 建议
-        aiAdvice.firstOrNull()?.let { advice ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("💡", style = MaterialTheme.typography.titleLarge)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(advice.advice,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("推理来源：${advice.source}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-
-        // 每周 AI 小结
-        SectionTitle("每周 AI 小结 · 近 7 天")
-        Button(
-            onClick = onGenerateWeekly,
-            enabled = !isWeeklyLoading,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(if (isWeeklyLoading) "⏳ 生成中…（约几秒）" else "📅 生成本周小结") }
-        Text("内容：总支出/日均、分类与渠道分布、高频去向、与上个 7 天环比、预算执行与下周建议。生成结果出现在上方「AI 建议」卡。",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-        // AI 外卖推荐：基于本地商家库 vs 历史账单
-        SectionTitle("AI 外卖推荐 · 最想吃 Top3")
-        TextField(
-            enabled = a11yEnabled,
-            value = currentNeeds,
-            onValueChange = onNeedsChange,
-            label = { Text("输入当前需求（例如：想吃辣的、预算30元内）") },
-            modifier = Modifier.fillMaxWidth()
+    // 支付临界点干预弹窗（屏2；预算剩余 = 真实月预算口径）
+    if (showSheet) {
+        val monthly = BudgetStore.monthlyBudget()
+        val dao = FinanceDb.get(context).billDao()
+        val (mf, mt) = monthRange()
+        val monthSpentState by dao.sumBetween(mf, mt).collectAsState(initial = 0.0)
+        val remainingPct = if (monthly > 0) {
+            ((monthly - monthSpentState) / monthly * 100).toInt().coerceIn(0, 100)
+        } else 23
+        InterventionSheet(
+            data = InterventionDetail(
+                remainingPercent = remainingPct,
+                usedAmount = "¥%,.0f".format(monthSpentState),
+                budgetAmount = "¥%,.0f".format(monthly),
+                rows = listOf(
+                    InterventionRow("本次支付", "¥329.00 · 电商平台"),
+                    InterventionRow("支付后本月总计", "¥%,.0f".format(monthSpentState + 329.0)),
+                    InterventionRow("本月预算", "¥%,.0f".format(monthly)),
+                    InterventionRow("支付后超支概率", "89% · 触发预警"),
+                ),
+            ),
+            onDismiss = { showSheet = false },
+            onAdopt = { showSheet = false },
+            onPayAnyway = { showSheet = false },
+            onWhy = {
+                showSheet = false
+                stackPage = LibanStackPage.EXPLAINABILITY
+            },
         )
-        Button(
-            onClick = onRecommendTop3,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = a11yEnabled && !isRecommendLoading && currentNeeds.isNotEmpty()
-        ) { Text(if (isRecommendLoading) "思考中..." else "从本地账单对比推荐 Top3") }
-
-        // 结果展示 Top3
-        if (topPicks.isNotEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("💡 结合你的历史账单，现在最想吃：",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    topPicks.take(3).forEachIndexed { idx, name ->
-                        OutlinedButton(
-                            onClick = { onPick(name) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("${idx + 1}. $name  → 去美团搜索")
-                        }
-                    }
-                    if (autoExecute) {
-                        Text("已开启自动执行：将直接打开美团搜索第 1 名",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.tertiary)
-                    }
-                }
-            }
-        }
-
-        // 商家库状态
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("🏪 本地商家库：$merchantCount 家",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("在「账单」页抓取美团/淘宝/支付宝后自动积累",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
     }
 }
+
 
 // ============ 咨询 Tab（AI 建议 / 每周小结 / Top3 推荐） ============
 @Composable
@@ -697,8 +499,7 @@ private fun ConsultTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        SectionTitle("AI 咨询中心")
-
+        // 顶部标题由外壳 PageHeader 呈现（liban 风格二级页），此处不再重复
         // 识屏助手（AI 购物决策：录屏/OCR/手动分析/最近决策）
         AgentPanel()
 
@@ -1150,29 +951,6 @@ private fun MineTabColumn(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-        // 更多产品：会员订阅 / 理性成长社区（纯视觉占位入口）
-        SectionTitle("更多功能")
-        PlaceholderEntryCard(
-            iconRes = R.drawable.ic_crown,
-            tint = com.example.finance.ui.theme.RationalWarning40,
-            tileBg = com.example.finance.ui.theme.RationalWarningContainer,
-            title = "会员订阅 · 升级「认知版」",
-            desc = "解锁完整 AI 消费分析能力",
-            onTap = {
-                android.widget.Toast.makeText(mineCtx, "会员订阅 · 敬请期待", android.widget.Toast.LENGTH_SHORT).show()
-            }
-        )
-        PlaceholderEntryCard(
-            iconRes = R.drawable.ic_users,
-            tint = com.example.finance.ui.theme.RationalPurple40,
-            tileBg = com.example.finance.ui.theme.RationalPurpleContainer,
-            title = "理性成长社区",
-            desc = "21 天理性消费挑战 · 同龄人都在聊",
-            onTap = {
-                android.widget.Toast.makeText(mineCtx, "理性成长社区 · 敬请期待", android.widget.Toast.LENGTH_SHORT).show()
-            }
-        )
-
         // 开发者
         Text("理伴 v${BuildConfig.VERSION_NAME} · 仅供演示",
             style = MaterialTheme.typography.labelSmall,
@@ -1294,52 +1072,6 @@ private fun A11yDiagnoseCard(a11yEnabled: Boolean, onOpenA11y: () -> Unit) {
     }
 }
 
-/** 「更多功能」占位入口卡：会员订阅 / 社区（点击提示敬请期待） */
-@Composable
-private fun PlaceholderEntryCard(
-    iconRes: Int,
-    tint: Color,
-    tileBg: Color,
-    title: String,
-    desc: String,
-    onTap: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onTap),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(tileBg),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(painterResource(iconRes), contentDescription = title, tint = tint,
-                    modifier = Modifier.size(20.dp))
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(desc, style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
-            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(999.dp)) {
-                Text("敬请期待", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
 
 private fun shareCsvFile(context: Context, path: String) {
     try {

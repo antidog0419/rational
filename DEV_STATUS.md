@@ -2,6 +2,21 @@
 
 ---
 
+## 【2026-09-08】liban-main UI 整体移植重构前端(5-Tab 外壳 + liban 配色 + 真实数据接线)
+
+> 背景:用户提供 `liban-main.zip`(同一产品家族另一实现,含完整 liban UI:底部 5 Tab、LibanTheme、components、screens、支付干预弹窗),要求**用 liban 的 ui 重构 app 前端界面**,并先做 git 备份。
+> 改动前备份:commit `5de5e7d` + tag `backup-pre-liban-ui-20260908-180642` + branch `backup/ui-before-liban-ui-20260908-180642` + 物理副本 `tools/ui-backup-before-liban-20260908/`。
+> 决策(用户确认):①整体移植 liban UI 外壳+页面;②底部 5 Tab = 首页/社区/+/记录/我的;③真实功能深度重组进 5 Tab,旧功能不丢;④主题色完全换 liban 配色。
+
+- **主题换肤**(`ui/theme/`):新增 `LibanTokens.kt`(port liban `LibanTheme.kt`:LibanColors #27BD9F 青绿体系 + Spacing/Radius + libanColors() 取色器);`Color.kt` 全量改写为 liban 色值(主 #27BD9F、底 #F5FAF8、primaryContainer #DFF5EE、danger #EF6A6A、gold #F2B01E、darkCard #14352C 等,删掉无引用的 Finance*/RationalBlue* 旧块);`Theme.kt` 的 FinanceTheme 固定 light scheme + 系统栏贴合背景;Type.kt 保留。build.gradle 增补 `material-icons-core`(bottom bar/返回箭头用)。
+- **port liban UI 进 com.example.finance.ui**:`components/`(Common/Cards/Headers/LibanBottomBar/ScoreRing/InterventionSheet)、`mock/MockData.kt`、`screens/`(CommunityScreen/MembershipScreen/DataPrivacyScreen/ExplainabilityScreen/ProfileScreen 等)按包名改写整体搬入;`Format.kt` 补 date/yuan 工具。
+- **新外壳 `HomeScreen.kt`**(重写 Scaffold):LibanBottomBar 5 Tab —— 首页=RationalHomeTab(真实数据仪表盘,金额/指数/预算读 FinanceDb+BudgetStore)、社区=CommunityScreen(演示数据)、中央+ = 支付干预弹窗(屏2,预算剩余按真实月预算口径)、记录=BillsTabColumn(真实账单区:自动抓取×3/手动补记/编辑/删除/去重提示)+ 页尾「识屏决策 & AI 建议历史」(agent.db 决策 + adviceFlow 会话,真实)、我的=ProfileScreen 行入口。二级 Stack 页全屏覆盖底栏:可解释性/数据权限/会员(演示)、预算设置/储蓄目标(真实 BudgetStore / agent.db goal)、系统与账单设置(=原「我的」真实全部:无障碍/DeepSeek/CSV/清空/来源清理)、AI 咨询中心(=原「咨询 Tab」真实:识屏助手/每周小结/Top3)。BackHandler 退二级页。删死代码 HomeTabColumn/PlaceholderEntryCard。
+- **验证**:`assembleDebug` ✅、`testDebugUnitTest`(16 套件 119 例)✅、encodingCheck 134 文件干净 UTF-8 ✅。
+- **遗留**:①记录页页尾已接决策/AI建议,但 RecordsScreen 级联滚动待真机观感走查;②liban 各演示页(社区/会员/数据权限)为纯展示,后续无真实后端可继续占位;③悬浮窗/非 Compose 窗口仍旧配色;④mint 时代遗留的 `RationalHome.kt` 现为「首页 Tab」内容(真实数据),其内部仍是旧式组件实现,待后续轮次按 liban components 再精修。
+- **git 备注**:liban-main.zip + liban-main/ + verify/ 等参考素材已加 .gitignore 不入库。
+
+---
+
 ## 【2026-09-07 21:40】UI 按 rational-ui-components.html 全面换肤(薄荷绿体系)+ 首页屏1 高保真(已装机验证)
 
 > 用设计稿 `rational-ui-components.html`(理性 Rational·薄荷绿 #5ECDB5 体系)重构 App UI。改动前已备份:
