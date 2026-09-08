@@ -2,6 +2,17 @@
 
 ---
 
+## 【2026-09-08 20:30】liban 5-Tab UI 真机走查(Redmi K60 Pro 无线 adb)✅ + 修复储蓄目标页 NPE 崩溃
+
+> 前文「liban-main UI 整体移植」装机走查:无线 adb 连上真机(Redmi K60 Pro,Android 14,1080x2400),安装 `app-debug.apk` 逐屏验证。
+
+- **走查结果(全通过)**:首页(RationalHome 真实仪表盘:指数/金额/预算/干预记录)+ 5-Tab 底栏(首页/社区/+/记录/我的,中央+ 为图形按钮)正常;记录页(月份统计/日历/趋势+分类/来源筛选/手动补记/**自动抓取×3**/去重提示/**系统日志 + 页尾「识屏决策 & AI 建议」占位**)滚动流畅;社区页(21 天挑战/精选/关注/最新帖子)渲染完整;中央 + → 支付干预弹窗(屏2,预算口径真实:¥2,000 已用 ¥0 → 剩余 100%);「为什么给这条提醒」→ 可解释性二级页(屏3)并 Back 正常返回;我的页 6 入口:AI 咨询中心(识屏助手真实)/数据与权限/会员订阅/预算设置(真实 BudgetStore:2000/800/400/300/200)/储蓄目标/系统与账单设置(无障碍体检真实诊断/灵动胶囊/DeepSeek)。
+- **崩溃修复**:点「我的→储蓄目标」时 agent.db SavingGoal 为空 → `RealSecondaryScreens.kt:186` 三元分支 `goal?.targetAmountCents!!` NPE,Compose 重组崩溃致 App 退出(真机必现)。已改 null-safe 进度计算并装机复验(显示"我的小目标 ¥12000 0%",不再崩溃),commit `c6f6fec`。
+- **截图**:`verify/home-liban-final.png`(首页)、`verify/intervention-liban-final.png`(屏2 弹窗)。
+- **遗留**:①liban 演示页(社区/会员/数据权限)文案仍为演示数据,如需改本地真实说明再动;②首页 RationalHome 仍为旧式组件实现(数据真实),可按需精修为 liban components;③悬浮窗/非 Compose 窗口仍旧配色。
+
+---
+
 ## 【2026-09-08】liban-main UI 整体移植重构前端(5-Tab 外壳 + liban 配色 + 真实数据接线)
 
 > 背景:用户提供 `liban-main.zip`(同一产品家族另一实现,含完整 liban UI:底部 5 Tab、LibanTheme、components、screens、支付干预弹窗),要求**用 liban 的 ui 重构 app 前端界面**,并先做 git 备份。
