@@ -58,10 +58,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import com.example.finance.agent.AgentGraph
 import com.example.finance.ui.components.BottomBarItem
@@ -263,7 +263,7 @@ fun HomeScreen() {
                         BottomBarItem(MainTab.HOME.label, Icons.Default.Home),
                         BottomBarItem(MainTab.COMMUNITY.label, Icons.Default.Face),
                         BottomBarItem(MainTab.CENTER.label, Icons.Default.Add, isCenter = true),
-                        BottomBarItem(MainTab.RECORD.label, Icons.Default.List),
+                        BottomBarItem(MainTab.RECORD.label, Icons.AutoMirrored.Filled.List),
                         BottomBarItem(MainTab.MINE.label, Icons.Default.Person),
                     ),
                     selectedIndex = selectedTab,
