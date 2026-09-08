@@ -182,8 +182,10 @@ fun GoalRealScreen(onBack: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(Spacing.xs))
-            val pct = if ((goal?.targetAmountCents ?: 1) > 0)
-                ((goal?.currentAmountCents ?: 0) * 100f / goal?.targetAmountCents!!).toInt()
+            val targetCentsSafe = goal?.targetAmountCents ?: 0L
+            val currentCentsSafe = goal?.currentAmountCents ?: 0L
+            val pct = if (goal != null && targetCentsSafe > 0)
+                (currentCentsSafe * 100f / targetCentsSafe).toInt()
                 else 0
             Text(
                 if (goal == null) "暂无储蓄目标：识屏引擎会按月预算自动创建。"
