@@ -1,6 +1,10 @@
 // ui/HomeScreen.kt
-// 底部导航三页：首页（概览+AI Top3 推荐）/ 账单（自动获取+明细+日志）/ 我的（无障碍+DeepSeek 设置+隐私）。
-// AI 外卖推荐：基于本地商家库（账单抓取自动积累）对比历史消费，输出"最想吃 Top3"。
+// liban-main UI 移植后的主外壳：底部 5 Tab（首页/社区/+/记录/我的，中央+ 拦截为支付干预弹窗）。
+//   · 首页 = RationalHomeTab（真实数据仪表盘：金额/指数/预算读 FinanceDb+BudgetStore）
+//   · 社区 = liban CommunityScreen（演示数据）
+//   · 记录 = BillsTabColumn（真实账单区）+ 页尾「识屏决策 & AI 建议历史」
+//   · 我的 = liban ProfileScreen 行入口 → 二级页（预算/储蓄目标真实、系统设置真实、AI 咨询真实、其余演示）
+// AI Top3/每周小结/识屏助手等能力经「我的 → AI 咨询中心」二级页复用原真实逻辑（ConsultTab）。
 
 package com.example.finance.ui
 

@@ -172,7 +172,7 @@ fun GoalRealScreen(onBack: () -> Unit) {
                                 targetCents = targetCents,
                                 currentCents = currentCents,
                                 deadlineEpochDay = goal?.deadlineEpochDay
-                                    ?: (java.time.LocalDate.now().plusMonths(6).toEpochDay()),
+                                    ?: (System.currentTimeMillis() / 86_400_000L + 180L), // 默认 6 个月后(约 180 天)
                             )
                             withContext(Dispatchers.Main) {
                                 android.widget.Toast.makeText(context, "✅ 目标已保存", android.widget.Toast.LENGTH_SHORT).show()
