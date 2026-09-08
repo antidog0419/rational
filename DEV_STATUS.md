@@ -12,6 +12,7 @@
 - **port liban UI 进 com.example.finance.ui**:`components/`(Common/Cards/Headers/LibanBottomBar/ScoreRing/InterventionSheet)、`mock/MockData.kt`、`screens/`(CommunityScreen/MembershipScreen/DataPrivacyScreen/ExplainabilityScreen/ProfileScreen 等)按包名改写整体搬入;`Format.kt` 补 date/yuan 工具。
 - **新外壳 `HomeScreen.kt`**(重写 Scaffold):LibanBottomBar 5 Tab —— 首页=RationalHomeTab(真实数据仪表盘,金额/指数/预算读 FinanceDb+BudgetStore)、社区=CommunityScreen(演示数据)、中央+ = 支付干预弹窗(屏2,预算剩余按真实月预算口径)、记录=BillsTabColumn(真实账单区:自动抓取×3/手动补记/编辑/删除/去重提示)+ 页尾「识屏决策 & AI 建议历史」(agent.db 决策 + adviceFlow 会话,真实)、我的=ProfileScreen 行入口。二级 Stack 页全屏覆盖底栏:可解释性/数据权限/会员(演示)、预算设置/储蓄目标(真实 BudgetStore / agent.db goal)、系统与账单设置(=原「我的」真实全部:无障碍/DeepSeek/CSV/清空/来源清理)、AI 咨询中心(=原「咨询 Tab」真实:识屏助手/每周小结/Top3)。BackHandler 退二级页。删死代码 HomeTabColumn/PlaceholderEntryCard。
 - **验证**:`assembleDebug` ✅、`testDebugUnitTest`(16 套件 119 例)✅、encodingCheck 134 文件干净 UTF-8 ✅。
+- **lint 说明**:`lintDebug` 现存 34 error / 98 warning 全部位于**移植前既有文件**(agent/PriceEvidenceAnalyzer、service/FinanceAccessibilityService、capture/FloatingCaptureService、agent/AgentGraph、data/AppRepository 等,最近改动均为 d771dd3 及更早),即 java.time(API26) 在 minSdk24 的老债务;本次新增文件已清零自身 lint error(java.time → epoch-day 算术),HomeScreen 头注释同步 5-Tab 外壳(提交 70e1549)。
 - **遗留**:①记录页页尾已接决策/AI建议,但 RecordsScreen 级联滚动待真机观感走查;②liban 各演示页(社区/会员/数据权限)为纯展示,后续无真实后端可继续占位;③悬浮窗/非 Compose 窗口仍旧配色;④mint 时代遗留的 `RationalHome.kt` 现为「首页 Tab」内容(真实数据),其内部仍是旧式组件实现,待后续轮次按 liban components 再精修。
 - **git 备注**:liban-main.zip + liban-main/ + verify/ 等参考素材已加 .gitignore 不入库。
 
